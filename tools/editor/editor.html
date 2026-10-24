@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja" data-view="write">
+<html lang="ja" data-mode="rich">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -10,13 +10,33 @@
     var m = null;
     try { m = localStorage.getItem('editor-kumi'); } catch (e) {}
     if (m !== 'yoko') document.documentElement.classList.add('tate');
+    // 書き方（見たまま／ソース）も端末に覚えておく
+    try { if (localStorage.getItem('editor-mode') === 'source') document.documentElement.dataset.mode = 'source'; } catch (e) {}
   })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600&display=swap">
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror-model": "/vendor/prosemirror-model.js",
+    "prosemirror-state": "/vendor/prosemirror-state.js",
+    "prosemirror-view": "/vendor/prosemirror-view.js",
+    "prosemirror-transform": "/vendor/prosemirror-transform.js",
+    "prosemirror-keymap": "/vendor/prosemirror-keymap.js",
+    "prosemirror-commands": "/vendor/prosemirror-commands.js",
+    "prosemirror-history": "/vendor/prosemirror-history.js",
+    "prosemirror-inputrules": "/vendor/prosemirror-inputrules.js",
+    "prosemirror-schema-list": "/vendor/prosemirror-schema-list.js",
+    "orderedmap": "/vendor/orderedmap.js",
+    "rope-sequence": "/vendor/rope-sequence.js",
+    "w3c-keyname": "/vendor/w3c-keyname.js"
+  }
+}
+</script>
 <style>
-/* 左に原稿、右にプレビュー。狭い画面では一面にして、書く／見るを切り替える。 */
+/* 原稿だけを一面に出し、見たままで書く（ソースで書くこともできる）。 */
 :root {
   --paper: #fcfbf8;
   --desk: #f5f3ee;
@@ -52,7 +72,16 @@ body {
   padding-left: max(12px, env(safe-area-inset-left, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
-.bar .spacer { flex: 1; }
+/* 飾りの道具。見たままの編集のときだけ使う */
+.fmt { flex: 1; min-width: 0; display: flex; justify-content: center; align-items: center; gap: 0.1rem; overflow-x: auto; scrollbar-width: none; }
+.fmt button {
+  flex: none; font: inherit; font-size: 0.8rem; letter-spacing: 0.05em; white-space: nowrap;
+  color: var(--ink-soft); background: none; border: 0; border-radius: 4px; padding: 0.35em 0.55em; cursor: pointer;
+}
+.fmt button:hover { color: var(--ink); }
+.fmt button[aria-pressed="true"] { color: var(--ink); background: var(--desk); }
+.fmt .sep { flex: none; width: 1px; height: 1rem; margin-inline: 0.3rem; background: var(--rule); }
+html[data-mode="source"] .fmt { visibility: hidden; }
 .ico {
   display: grid; place-items: center;
   width: 2.25rem; height: 2.25rem;
@@ -63,18 +92,14 @@ body {
 .ico svg { width: 1.1rem; height: 1.1rem; display: block; }
 .ico:disabled { cursor: progress; opacity: 0.4; }
 .ico:focus-visible, textarea:focus-visible, input:focus-visible, button:focus-visible { outline: 1px solid var(--ink-soft); outline-offset: 3px; }
-.desk { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; }
-.pane { min-width: 0; min-height: 0; position: relative; }
 .write {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-block: 6vh 10vh;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: 16px;
 }
-.view { background: var(--desk); }
-html[data-view="write"] .view { display: none; }
-html[data-view="view"] .write { display: none; }
-.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--desk); }
 
 .sheet { max-inline-size: 34em; margin-inline: auto; display: flex; flex-direction: column; gap: 2em; }
 .meta { display: flex; flex-direction: column; gap: 0.6em; }
@@ -104,7 +129,77 @@ textarea {
   resize: none;
   field-sizing: content;
 }
-.write.dragging textarea { outline: 1px dashed var(--ink-soft); outline-offset: 8px; }
+.write.dragging textarea, .write.dragging .pm { outline: 1px dashed var(--ink-soft); outline-offset: 8px; }
+html[data-mode="rich"] #body, html[data-mode="source"] .pm { display: none; }
+
+/* ---- 見たままの編集。組み上がり（src/assets/site.css）に寄せる ---- */
+.pm { min-block-size: 60vh; }
+.ProseMirror {
+  position: relative; outline: none; min-block-size: inherit;
+  font: 1rem/2 var(--mincho); letter-spacing: 0.04em; line-break: strict;
+  word-wrap: break-word; white-space: pre-wrap; white-space: break-spaces;
+  font-variant-ligatures: none; font-feature-settings: "liga" 0;
+}
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
+.ProseMirror [draggable][contenteditable=false] { user-select: text; }
+.ProseMirror-selectednode { outline: 1px solid var(--ink-soft); outline-offset: 2px; border-radius: 2px; }
+.ProseMirror > p:only-child:has(> br:only-child)::before { content: "本文"; position: absolute; color: var(--ink-soft); opacity: 0.6; }
+.pm p { margin: 0; text-indent: 1em; }
+.pm h2 { margin: 0; margin-block: 2em 1em; padding-inline-start: 3em; font-size: 1em; font-weight: 600; line-height: inherit; letter-spacing: 0.08em; }
+.pm h2::before { content: attr(data-na); margin-inline-end: 1em; letter-spacing: 0; color: var(--ink-soft); }
+.pm em {
+  font-style: normal;
+  -webkit-text-emphasis: filled sesame; text-emphasis: filled sesame;
+  -webkit-text-emphasis-position: over right; text-emphasis-position: over right;
+}
+.pm rt { font-size: 0.5em; letter-spacing: 0; }
+.ed-ruby rt:empty::before { content: "よみ"; opacity: 0.4; }
+.ed-ruby, .ed-tcy, .ed-fnref, .ed-fig { cursor: pointer; }
+.ed-tcy { text-combine-upright: all; }
+.pm blockquote { margin: 0; margin-block: 2em; padding-inline-start: 2em; font-size: 0.92em; }
+.pm blockquote p.src { text-indent: 0; text-align: end; color: var(--ink-soft); font-size: 0.92em; margin-block-start: 0.5em; }
+.ed-hr { text-indent: 0; text-align: center; color: var(--ink-soft); user-select: none; }
+.pm ul, .pm ol { margin: 0; margin-block: 1em; padding-inline-start: 2em; }
+.pm li ul, .pm li ol { margin-block: 0; }
+.pm ul { list-style-type: "・"; }
+.pm li::marker { color: var(--ink-soft); }
+.pm li p { text-indent: 0; }
+.ed-fnref { font-size: 0.6em; vertical-align: super; line-height: 0; margin-inline-start: 0.1em; letter-spacing: 0; color: var(--ink-soft); }
+.ed-fnref::after { content: attr(data-na); }
+.ed-fnref.missing { color: #b0503f; }
+.ed-fig { font-size: 0.85em; letter-spacing: 0; color: var(--ink-soft); }
+.ed-fig::after { content: "（図" attr(data-na) "）"; }
+.ed-note { font-size: 0.75em; color: var(--ink-soft); text-indent: 0; padding-inline-start: 2.5em; }
+:not(.ed-note) + .ed-note { margin-block-start: 3em; }
+:not(.ed-note) + .ed-note::before { content: ""; display: block; inline-size: 5em; margin-inline-start: -2.5em; border-block-start: 1px solid var(--rule); margin-block-end: 1.25em; }
+.ed-note-no { display: inline-block; inline-size: 2.5em; margin-inline-start: -2.5em; color: var(--ink); cursor: pointer; }
+.ed-note.orphan, .ed-note.dup { opacity: 0.55; }
+.ed-note a { color: inherit; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+html.tate .pm h2::before { content: attr(data-nk); color: inherit; }
+html.tate .pm ol { list-style-type: japanese-informal; }
+html.tate .ed-fnref { vertical-align: top; }
+html.tate .ed-fnref::after { content: attr(data-nk); }
+html.tate .ed-fig::after { content: "（図" attr(data-nk) "）"; }
+html.tate .ed-note a { text-underline-position: right; }
+html.tate .na, html:not(.tate) .nk { display: none; }
+
+/* 選んだルビ・縦中横・図を直す小窓 */
+.ed-inspect {
+  position: fixed; z-index: 10; writing-mode: horizontal-tb;
+  width: 16rem; display: flex; flex-direction: column; gap: 0.45rem;
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.75rem 1rem; font-size: 0.8rem; line-height: 1.6;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+}
+.ed-inspect label { display: flex; align-items: baseline; gap: 0.75em; }
+.ed-inspect label span { flex: none; min-width: 3.5em; color: var(--ink-soft); }
+.ed-inspect input { flex: 1; min-width: 0; font: inherit; font-size: 0.95rem; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 0.15em 0; }
+.ed-inspect small { font-size: 0.7rem; color: var(--ink-soft); }
+.ed-inspect .mono { font-family: var(--mono); overflow-wrap: anywhere; }
+.ed-inspect img { align-self: center; max-width: 100%; max-height: 10rem; object-fit: contain; }
+.ed-inspect button { align-self: flex-start; font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer; }
+.ed-inspect button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
 
 /* 縦組の原稿。行の長さを画面の高さに合わせ、右から左へ書き進める（横にスクロール） */
 html.tate .write {
@@ -116,6 +211,8 @@ html.tate .write {
 }
 html.tate .sheet { block-size: 100%; }
 html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
+html.tate .pm { min-block-size: 50vw; }
+html.tate .ProseMirror { letter-spacing: 0.06em; }
 
 .foot {
   flex: none;
@@ -187,17 +284,35 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
 .notes dt { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); white-space: nowrap; }
 .notes dd { margin: 0; color: var(--ink-soft); }
 .notes p { margin: 0.75em 0 0; color: var(--ink-soft); font-size: 0.8rem; }
+.notes h2 + dl, .notes p + dl { margin-top: 0.5em; }
+.notes h2:not(:first-child) { margin-top: 1.5em; }
 
 </style>
 </head>
 <body>
   <header class="bar">
     <button type="button" class="ico" id="list-btn" aria-expanded="false" aria-controls="list-pop" aria-label="原稿の一覧" title="原稿の一覧"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h8"/></svg></button>
-    <span class="spacer"></span>
-    <button type="button" class="ico" id="view-btn" aria-pressed="false" aria-label="組み上がりを見る" title="組み上がりを見る"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4.5v10M9 4.5C7.5 3.5 5 3 2.5 3.5v10C5 13 7.5 13.5 9 14.5M9 4.5c1.5-1 4-1.5 6.5-1v10c-2.5-.5-5 0-6.5 1"/></svg></button>
+    <div class="fmt" id="fmt" role="toolbar" aria-label="飾り">
+      <button type="button" data-cmd="heading" aria-pressed="false" title="見出し（行頭に ## と空白でも）">見出し</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" data-cmd="em" aria-pressed="false" title="傍点（⌘B / Ctrl+B）">傍点</button>
+      <button type="button" data-cmd="ruby" aria-pressed="false" title="選んだ字にルビを振る">ルビ</button>
+      <button type="button" data-cmd="tcy" aria-pressed="false" title="選んだ三字までの英数字を縦中横にする">縦中横</button>
+      <button type="button" data-cmd="width" title="選んだ英数字を全角⇄半角にする">全角⇄半角</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" data-cmd="quote" aria-pressed="false" title="引用（行頭に &gt; と空白でも）。――で始まる段落は出典">引用</button>
+      <button type="button" data-cmd="bullet" aria-pressed="false" title="箇条書き（行頭に - と空白でも）">箇条書き</button>
+      <button type="button" data-cmd="ordered" aria-pressed="false" title="番号付きの箇条書き（行頭に 1. と空白でも）">番号</button>
+      <button type="button" data-cmd="rule" title="場面の区切り（空の行に --- でも）">区切り</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" data-cmd="note" title="ここに注を付ける">注</button>
+      <button type="button" data-cmd="image" title="図を置く">図</button>
+      <input type="file" id="image-in" accept="image/*" multiple hidden>
+    </div>
+    <button type="button" class="ico" id="mode-btn" aria-pressed="false" aria-label="ソースで書く" title="ソースで書く"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 5L3 9l3.5 4M11.5 5L15 9l-3.5 4"/></svg></button>
     <button type="button" class="ico" id="kumi-btn" aria-label="横組にする" title="横組にする"><svg class="to-yoko" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h13M2.5 9h13M2.5 14h7"/></svg><svg class="to-tate" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true" hidden><path d="M14 2.5v13M9 2.5v13M4 2.5v7"/></svg></button>
     <button type="button" class="ico" id="deploy-btn" aria-label="公開する" title="公開する"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12V3M5.5 6.5L9 3l3.5 3.5M3 11.5v3h12v-3"/></svg></button>
-    <button type="button" class="ico" id="notes-btn" aria-expanded="false" aria-controls="notes" aria-label="記法" title="記法"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.8a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7v.3"/><path d="M9 13.6v.1"/></svg></button>
+    <button type="button" class="ico" id="notes-btn" aria-expanded="false" aria-controls="notes" aria-label="書き方" title="書き方"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.8a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7v.3"/><path d="M9 13.6v.1"/></svg></button>
 
     <div class="pop left" id="list-pop" hidden>
       <h2>原稿</h2>
@@ -207,13 +322,26 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     </div>
 
     <div class="pop right notes" id="notes" hidden>
-      <h2>記法</h2>
+      <h2>見たままで書く</h2>
+      <dl>
+        <dt>## 空白</dt><dd>行頭で見出しになる</dd>
+        <dt>&gt; 空白</dt><dd>引用。――で始まる段落は出典</dd>
+        <dt>- 空白</dt><dd>箇条書き（・ でも）</dd>
+        <dt>1. 空白</dt><dd>番号付きの箇条書き</dd>
+        <dt>---</dt><dd>空の行で、場面の区切り</dd>
+        <dt>⌘B</dt><dd>傍点（Ctrl+B でも）</dd>
+        <dt>Shift+Enter</dt><dd>段落の中の改行</dd>
+        <dt>Tab</dt><dd>箇条書きの入れ子（Shift+Tab で戻す）</dd>
+      </dl>
+      <p>ルビと縦中横は、字を選んでから上の道具で付けます。付けたルビ・縦中横・図は、押すと直せます。注は「注」で付け、中身は末尾の欄に書きます。注番号を押すと中身へ、中身の頭の番号を押すと本文へ移ります。全角の ＃ や ＞ でも効きます。</p>
+      <h2>ソースで書く</h2>
       <dl>
         <dt>{漢字|かんじ}</dt><dd>ルビ</dd>
         <dt>{東京|とう|きょう}</dt><dd>一字ずつのルビ</dd>
         <dt>^12^</dt><dd>縦中横（三字まで）</dd>
         <dt>*語*</dt><dd>強調（傍点）</dd>
         <dt>空行</dt><dd>段落の区切り</dd>
+        <dt>改行</dt><dd>段落の中の改行</dd>
         <dt>## 題</dt><dd>見出し（番号が付く）</dd>
         <dt>---</dt><dd>場面の区切り（＊）</dd>
         <dt>&gt; 文</dt><dd>引用（二字下げ）</dd>
@@ -223,31 +351,25 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
         <dt>文[^1]</dt><dd>注の番号</dd>
         <dt>[^1]: 注の文</dt><dd>注の中身（空行まで）。URL はリンクになる</dd>
         <dt>![説明](画像)</dt><dd>図（押すと開く）</dd>
-        <dt>ＮＨＫ</dt><dd>全角は縦組で正立、横組では半角</dd>
-        <dt>Typography</dt><dd>半角は縦組で横倒し</dd>
       </dl>
-      <p>和文と英字の間のスペースは要りません。空きは組版で付きます。画像は原稿の欄に落とすか貼り付けると、記事のフォルダに保存されます。保存は ⌘S / Ctrl+S でも。</p>
+      <p>ＮＨＫのような全角の英数字は縦組で正立し、横組では半角に戻ります。半角は縦組で横倒しになります。和文と英字の間のスペースは要りません。空きは組版で付きます。画像は原稿の欄に落とすか貼り付けると、記事のフォルダに保存されます。保存は ⌘S / Ctrl+S でも。</p>
     </div>
   </header>
 
-  <div class="desk">
-    <section class="pane write" id="write" aria-label="原稿">
-      <div class="sheet">
-        <div class="meta">
-          <input class="title-in" id="title" type="text" placeholder="題" aria-label="題">
-          <div class="sub">
-            <input class="date-in" id="date" type="date" aria-label="日付">
-            <label class="slug"><span aria-hidden="true">posts/</span><input class="slug-in" id="slug" type="text" placeholder="名前" aria-label="原稿の名前（URL）" autocomplete="off" spellcheck="false"></label>
-            <label class="draft" title="下書きの原稿は公開しません"><input id="draft" type="checkbox">下書き</label>
-          </div>
+  <section class="write" id="write" aria-label="原稿">
+    <div class="sheet">
+      <div class="meta">
+        <input class="title-in" id="title" type="text" placeholder="題" aria-label="題">
+        <div class="sub">
+          <input class="date-in" id="date" type="date" aria-label="日付">
+          <label class="slug"><span aria-hidden="true">posts/</span><input class="slug-in" id="slug" type="text" placeholder="名前" aria-label="原稿の名前（URL）" autocomplete="off" spellcheck="false"></label>
+          <label class="draft" title="下書きの原稿は公開しません"><input id="draft" type="checkbox">下書き</label>
         </div>
-        <textarea id="body" aria-label="本文" placeholder="本文" spellcheck="false"></textarea>
       </div>
-    </section>
-    <section class="pane view" aria-label="組み上がり">
-      <iframe id="preview" src="/preview" title="組み上がり"></iframe>
-    </section>
-  </div>
+      <div class="pm" id="pm"></div>
+      <textarea id="body" aria-label="本文（ソース）" placeholder="本文" spellcheck="false"></textarea>
+    </div>
+  </section>
 
   <footer class="foot">
     <span id="count">〇字</span>
@@ -255,14 +377,35 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     <span class="status" id="status" role="status"></span>
   </footer>
 
-<script>
+<script type="module">
+import { createEditor } from '/wysiwyg.js';
+
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var title = $('title'), date = $('date'), slugIn = $('slug'), body = $('body'), draft = $('draft');
-  var statusEl = $('status'), frame = $('preview');
+  var statusEl = $('status');
   var SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
   var current = { slug: null, saved: true };
   var posts = [];
+
+  // ---- 本文：見たままの編集（ProseMirror）か、ソース（textarea）のどちらかで書く ----
+  // 見たままのときの原稿は、書き換えるたびに文書から作り直す。開いただけでは原稿に触らない
+  var mode = document.documentElement.dataset.mode;
+  var bodyMd = '';
+  function getBody() { return mode === 'source' ? body.value : bodyMd; }
+  var editor = createEditor($('pm'), {
+    onChange: function () { bodyMd = editor.markdown(); changed(); },
+    onUpdate: updateTools,
+    onFiles: uploadImages,
+    imageBase: function () { return '/posts/' + (current.slug || slugIn.value || '_') + '/'; },
+  });
+  var loadSeq = 0;
+  function loadRich(text) {
+    var seq = ++loadSeq;
+    return api('POST', '/api/doc', { body: text }).then(function (r) {
+      if (seq === loadSeq) editor.load(r.doc);
+    });
+  }
 
   function setStatus(t, warn) { statusEl.textContent = t; statusEl.classList.toggle('warn', !!warn); }
   function today() {
@@ -283,7 +426,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
   var KANJI = '〇一二三四五六七八九';
   function kanjiNum(n) { return String(n).replace(/[0-9]/g, function (d) { return KANJI[+d]; }); }
   function count() {
-    var plain = body.value
+    var plain = getBody()
       .replace(/^\[\^[^\]\s]+\]:(?:.*\S.*(?:\n|$))+/gm, '')
       .replace(/\[\^[^\]\s]+\]/g, '')
       .replace(/!\[[^\[\]]*\]\([^)]*\)/g, '')
@@ -297,24 +440,6 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     $('count').textContent = kanjiNum(n) + '字';
     $('sheets').textContent = '原稿用紙' + kanjiNum(Math.max(1, Math.ceil(n / 400))) + '枚';
   }
-
-  // ---- プレビュー ----
-  var previewReady = false, renderTimer = null, renderSeq = 0;
-  frame.addEventListener('load', function () { previewReady = true; applyKumi(); render(); });
-  function pdoc() { return frame.contentDocument; }
-  function render() {
-    if (!previewReady) return;
-    var seq = ++renderSeq;
-    api('POST', '/api/render', { title: title.value, date: date.value, body: body.value }).then(function (r) {
-      if (seq !== renderSeq) return;
-      var d = pdoc();
-      d.getElementById('base').setAttribute('href', '/posts/' + (current.slug || slugIn.value || '_') + '/');
-      d.getElementById('out').innerHTML = r.html;
-      var w = frame.contentWindow;
-      if (w.hon) w.hon.refresh();
-    }).catch(function (e) { setStatus(e.message, true); });
-  }
-  function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 200); }
 
   // ---- 保存 ----
   // 保存は一度に一つずつ。保存の途中に書き足した分は、保存し終えても「保存していない」のままにする
@@ -337,7 +462,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     setStatus('保存しています');
     var at = edits;
     var isDraft = draft.checked;
-    return api('PUT', '/api/posts/' + slug, { title: title.value, date: date.value, draft: isDraft, body: body.value })
+    return api('PUT', '/api/posts/' + slug, { title: title.value, date: date.value, draft: isDraft, body: getBody() })
       .then(function () {
         var first = !current.slug;
         var p = posts.find(function (x) { return x.slug === slug; });
@@ -346,7 +471,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
         slugIn.readOnly = true;
         try { localStorage.setItem('editor-last', slug); } catch (e) {}
         setStatus(current.saved ? '保存しました' : '書いています');
-        if (first) { loadList(); render(); }
+        if (first) loadList();
         else if (p && p.draft !== isDraft) loadList();
         return true;
       })
@@ -356,7 +481,6 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     edits++;
     current.saved = false;
     count();
-    scheduleRender();
     setStatus('書いています');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 1200);
@@ -376,15 +500,13 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
   function fill(p) {
     title.value = p.title || '';
     date.value = p.date || today();
-    body.value = p.body || '';
+    body.value = bodyMd = p.body || '';
+    if (mode === 'rich') loadRich(bodyMd).catch(function (e) { setStatus(e.message, true); });
     slugIn.value = p.slug || '';
     slugIn.readOnly = !!p.slug;
     draft.checked = !!p.draft;
     current = { slug: p.slug || null, saved: true };
     count();
-    render();
-    var w = frame.contentWindow;
-    if (w && w.hon) setTimeout(function () { w.hon.toStart(); }, 50);
     writeToStart();
     markCurrent();
   }
@@ -576,7 +698,11 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
         return p.then(function () {
           var name = f.name && /\.[a-z0-9]+$/i.test(f.name) ? f.name : 'image.' + (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
           return api('POST', '/api/posts/' + current.slug + '/images?name=' + encodeURIComponent(name), f, true)
-            .then(function (r) { insertAt('![' + name.replace(/\.[^.]+$/, '') + '](' + r.name + ')'); });
+            .then(function (r) {
+              var alt = name.replace(/\.[^.]+$/, '');
+              if (mode === 'rich') editor.insertImage(r.name, alt);
+              else insertAt('![' + alt + '](' + r.name + ')');
+            });
         });
       }, Promise.resolve()).then(function () { setStatus('画像を置きました'); })
         .catch(function (e) { setStatus(e.message, true); });
@@ -584,22 +710,83 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     return true;
   }
   var writePane = $('write');
-  body.addEventListener('dragover', function (e) {
-    if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.items || [], function (i) { return i.kind === 'file'; })) {
-      e.preventDefault();
-      writePane.classList.add('dragging');
-    }
+  [body, $('pm')].forEach(function (el) {
+    el.addEventListener('dragover', function (e) {
+      if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.items || [], function (i) { return i.kind === 'file'; })) {
+        e.preventDefault();
+        writePane.classList.add('dragging');
+      }
+    });
+    el.addEventListener('dragleave', function () { writePane.classList.remove('dragging'); });
+    el.addEventListener('drop', function () { writePane.classList.remove('dragging'); });
   });
-  body.addEventListener('dragleave', function () { writePane.classList.remove('dragging'); });
+  // 見たままのときの落とし込みと貼り付けは editor（wysiwyg.js）が受けて uploadImages に回す
   body.addEventListener('drop', function (e) {
-    writePane.classList.remove('dragging');
     if (uploadImages(e.dataTransfer && e.dataTransfer.files)) e.preventDefault();
   });
   body.addEventListener('paste', function (e) {
     if (uploadImages(e.clipboardData && e.clipboardData.files)) e.preventDefault();
   });
 
-  // ---- 組方：原稿とプレビューで共通。選んだ組方は端末に覚えておく ----
+  // ---- 飾りの道具（見たままの編集） ----
+  var HINTS = {
+    em: '傍点を打つ字を選んでください',
+    ruby: 'ルビを振る字を選んでから押してください（記号や改行を含まない範囲）',
+    tcy: '縦中横にする三字までの英数字を選んでください',
+    width: '全角・半角を変える英数字を選んでください',
+    note: '注の中には注を付けられません',
+    rule: '注の中には区切りを置けません',
+  };
+  var fmtButtons = document.querySelectorAll('#fmt button');
+  function updateTools() {
+    var a = editor.active();
+    fmtButtons.forEach(function (b) {
+      if (b.hasAttribute('aria-pressed')) b.setAttribute('aria-pressed', String(!!a[b.dataset.cmd]));
+    });
+  }
+  fmtButtons.forEach(function (b) {
+    // 押しても本文の選択を外さない
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      var cmd = b.dataset.cmd;
+      if (cmd === 'image') { $('image-in').click(); return; }
+      if (!editor.run(cmd)) setStatus(HINTS[cmd] || 'ここでは使えません', true);
+    });
+  });
+  $('image-in').addEventListener('change', function (e) {
+    uploadImages(e.target.files);
+    e.target.value = '';
+  });
+
+  // ---- 見たまま／ソース。切り替えるときに、原稿と文書を作り直す ----
+  var modeBtn = $('mode-btn');
+  function applyMode() {
+    var src = mode === 'source';
+    document.documentElement.dataset.mode = mode;
+    modeBtn.setAttribute('aria-pressed', String(src));
+    var t = src ? '見たままで書く' : 'ソースで書く';
+    modeBtn.setAttribute('aria-label', t);
+    modeBtn.title = t;
+    try { localStorage.setItem('editor-mode', mode); } catch (e) {}
+  }
+  modeBtn.addEventListener('click', function () {
+    if (mode === 'rich') {
+      body.value = bodyMd;
+      mode = 'source';
+      applyMode();
+      body.focus();
+      return;
+    }
+    bodyMd = body.value;
+    loadRich(bodyMd).then(function () {
+      mode = 'rich';
+      applyMode();
+      editor.focus();
+    }).catch(function (e) { setStatus(e.message, true); });
+  });
+  applyMode();
+
+  // ---- 組方。選んだ組方は端末に覚えておく ----
   var kumiBtn = $('kumi-btn');
   function isTate() { return document.documentElement.classList.contains('tate'); }
   function applyKumi() {
@@ -609,10 +796,6 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     var t = tate ? '横組にする' : '縦組にする';
     kumiBtn.setAttribute('aria-label', t);
     kumiBtn.title = t;
-    if (!previewReady) return;
-    pdoc().documentElement.classList.toggle('tate', tate);
-    var w = frame.contentWindow;
-    if (w.hon) { w.hon.refresh(); w.hon.toStart(); }
   }
   // 縦組は右端が冒頭。ブラウザによって scrollLeft の向きが違うので、大きな値を入れて右端に寄せる
   function writeToStart() {
@@ -631,20 +814,6 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { writePane.scrollLeft -= e.deltaY; e.preventDefault(); }
   }, { passive: false });
   applyKumi();
-
-  // ---- 書く／見る ----
-  var viewBtn = $('view-btn');
-  viewBtn.addEventListener('click', function () {
-    var root = document.documentElement;
-    var v = root.dataset.view === 'write' ? 'view' : 'write';
-    root.dataset.view = v;
-    viewBtn.setAttribute('aria-pressed', v === 'view');
-    var t = v === 'view' ? '原稿に戻る' : '組み上がりを見る';
-    viewBtn.setAttribute('aria-label', t);
-    viewBtn.title = t;
-    var w = frame.contentWindow;
-    if (v === 'view' && w.hon) requestAnimationFrame(w.hon.toStart);
-  });
 
   // ---- 小窓 ----
   var pops = [[$('list-btn'), $('list-pop')], [$('notes-btn'), $('notes')]];

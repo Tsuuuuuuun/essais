@@ -1,10 +1,8 @@
 // 組方の切り替え、縦組の横スクロール、全角英数字の出し分け、注と図の操作。
-// 執筆画面のプレビュー（html に data-preview）でも同じものを使う。
 (function () {
   var root = document.documentElement;
   var main = document.getElementById('scroller');
   var ico = document.getElementById('kumi-ico');
-  var preview = root.hasAttribute('data-preview');
 
   function mode() { return root.classList.contains('tate') ? 'tate' : 'yoko'; }
 
@@ -33,7 +31,6 @@
       ico.setAttribute('aria-label', t);
       ico.dataset.tip = t;
     }
-    if (preview) return;
     document.querySelectorAll('a[data-kumi]').forEach(function (a) {
       a.setAttribute('href', a.getAttribute('href').split('#')[0] + '#' + m);
     });
@@ -115,12 +112,6 @@
       t.scrollIntoView({ block: 'center', inline: 'center', behavior: reduce ? 'auto' : 'smooth' });
     }
   });
-
-  // 執筆画面のプレビューから呼ぶ
-  window.hon = {
-    refresh: function () { zen(); },
-    toStart: toStart,
-  };
 
   sync();
   zen();

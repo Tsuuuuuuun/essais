@@ -3,21 +3,21 @@
 // 原稿は src/posts/<名前>/index.md に直接保存する。画像も同じフォルダに置く。
 // 下書きは front matter の draft: true（読み書きは lib/post.js）。
 // 消した原稿はフォルダごと .trash/<名前>-<日時>/ に移す。戻すときはフォルダを src/posts/ に戻す。
-// プレビューはサイトと同じ変換（lib/markdown.js）と CSS（src/assets/site.css）で組む。
+// 見たままの編集には ProseMirror を使う。node_modules から ES モジュールのまま配る（/vendor/<名前>.js）。
 
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { readFile, writeFile, mkdir, readdir, stat, rename } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { md } from '../../lib/markdown.js';
-import { kanjiDate } from '../../lib/kanji.js';
 import { ORDER_FILE, readOrder, formatOrder, sortPosts } from '../../lib/order.js';
 import { POSTS_DIR as POSTS, SLUG, parsePost, formatPost } from '../../lib/post.js';
+import { toDoc } from './doc.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const ASSETS = path.join(ROOT, 'src/assets');
 const TRASH = path.join(ROOT, '.trash');
 const PORT = Number(process.env.PORT) || 8090;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -46,31 +46,39 @@ async function listPosts() {
   return sortPosts(out, readOrder(), (p) => p.slug, (p) => Date.parse(p.date) || 0);
 }
 
-// ---- プレビュー ----
-function renderArticle({ title, date, body }) {
-  return (
-    `<h1>${md.renderInline(String(title || '題'))}</h1>\n` +
-    md.render(String(body || '')) +
-    (date ? `<p class="colophon">${kanjiDate(date)}</p>` : '')
-  );
+// ---- ブラウザに配るモジュール ----
+// 名前 → ES モジュールのファイル。依存の依存（orderedmap など）は、それを使うパッケージの場所から探す
+const VENDOR = [
+  'prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'prosemirror-transform',
+  'prosemirror-keymap', 'prosemirror-commands', 'prosemirror-history', 'prosemirror-inputrules',
+  'prosemirror-schema-list', 'orderedmap', 'rope-sequence', 'w3c-keyname',
+];
+const vendor = new Map();
+function packageDir(file) {
+  for (let dir = path.dirname(file); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    try { readFileSync(path.join(dir, 'package.json')); return dir; } catch {}
+  }
+  return null;
 }
-
-const PREVIEW = `<!doctype html>
-<html lang="ja" class="tate js" data-preview>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<base id="base" href="/posts/">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/site.css">
-<script src="/assets/site.js" defer></script>
-</head>
-<body>
-<main id="scroller" tabindex="0" aria-label="プレビュー"><article id="out"></article></main>
-</body>
-</html>`;
+function resolveVendor(name) {
+  if (vendor.has(name)) return vendor.get(name);
+  const from = [path.join(ROOT, 'package.json'), ...[...vendor.values()].map((f) => f && path.join(packageDir(f), 'package.json'))];
+  for (const parent of from) {
+    if (!parent) continue;
+    try {
+      const dir = packageDir(createRequire(parent).resolve(name));
+      const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
+      const exp = pkg.exports && (pkg.exports['.'] || pkg.exports);
+      const entry = (exp && (typeof exp.import === 'string' ? exp.import : exp.import && exp.import.default)) || pkg.module;
+      if (!entry) continue;
+      const file = path.join(dir, entry);
+      vendor.set(name, file);
+      return file;
+    } catch {}
+  }
+  return null;
+}
+VENDOR.forEach(resolveVendor);
 
 // ---- 公開 ----
 // pnpm run deploy と同じく、ビルドしてから scripts/deploy.mjs を走らせる。一度に一つだけ
@@ -137,13 +145,15 @@ const server = http.createServer(async (req, res) => {
     const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 
     if (req.method === 'GET' && url.pathname === '/') return serveFile(res, path.join(HERE, 'editor.html'));
-    if (req.method === 'GET' && url.pathname === '/preview') return send(res, 200, PREVIEW, TYPES['.html']);
-
-    if (req.method === 'GET' && parts[0] === 'assets') {
-      const f = inside(ASSETS, parts.slice(1).join('/'));
+    if (req.method === 'GET' && url.pathname === '/wysiwyg.js') return serveFile(res, path.join(HERE, 'wysiwyg.js'));
+    if (req.method === 'GET' && url.pathname === '/lib/kanji.js') return serveFile(res, path.join(ROOT, 'lib/kanji.js'));
+    if (req.method === 'GET' && parts[0] === 'vendor' && parts.length === 2) {
+      const name = parts[1].replace(/\.js$/, '');
+      const f = VENDOR.includes(name) && resolveVendor(name);
       return f ? serveFile(res, f) : send(res, 404, '見つかりません');
     }
-    // プレビューの中の画像（記事と同じフォルダ）
+
+    // 図の画像（記事と同じフォルダ）。ルビ・図の小窓で見せる
     if (req.method === 'GET' && parts[0] === 'posts' && parts.length === 3 && SLUG.test(parts[1])) {
       if (!IMAGE_EXT.has(path.extname(parts[2]).toLowerCase())) return send(res, 404, '見つかりません');
       const f = inside(POSTS, `${parts[1]}/${parts[2]}`);
@@ -181,10 +191,10 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // プレビュー
-      if (req.method === 'POST' && parts[1] === 'render') {
+      // 原稿を見たままの編集の文書に変える
+      if (req.method === 'POST' && parts[1] === 'doc' && parts.length === 2) {
         const data = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-        return json(res, 200, { html: renderArticle(data) });
+        return json(res, 200, { doc: toDoc(data.body) });
       }
 
       if (parts[1] === 'posts' && parts[2]) {
