@@ -1,13 +1,29 @@
+import { rm } from 'node:fs/promises';
 import { md } from './lib/markdown.js';
 import { kanjiDate } from './lib/kanji.js';
 import { ORDER_FILE, readOrder, sortPosts } from './lib/order.js';
+import { publishedSlugs } from './lib/post.js';
 
 export default function (eleventyConfig) {
   // 原稿の変換は lib/markdown.js（執筆画面のプレビューと共通）
   eleventyConfig.setLibrary('md', md);
 
   eleventyConfig.addPassthroughCopy('src/assets');
-  eleventyConfig.addPassthroughCopy('src/posts/**/*.{jpg,jpeg,png,gif,webp,avif,svg}');
+  // 一回きりのビルド（pnpm build / deploy）では、書き出す前に _site/ を空にする。
+  // 消した原稿や下書きに戻した原稿の頁が残って、公開されてしまわないように
+  eleventyConfig.on('eleventy.before', async ({ runMode, directories }) => {
+    if (runMode === 'build') await rm(directories.output, { recursive: true, force: true });
+  });
+
+  // 画像は下書きでない記事のぶんだけ写す。下書きかどうかは設定を読んだ時点で決まる
+  for (const slug of publishedSlugs()) {
+    eleventyConfig.addPassthroughCopy(`src/posts/${slug}/*.{jpg,jpeg,png,gif,webp,avif,svg}`);
+  }
+
+  // draft: true の原稿（下書き）は書き出さず、目次にも載せない
+  eleventyConfig.addPreprocessor('drafts', 'md', (data) => {
+    if (data.draft === true) return false;
+  });
 
   eleventyConfig.addFilter('kanjiDate', kanjiDate);
   eleventyConfig.addFilter('inlineMd', (s) => md.renderInline(String(s ?? '')));

@@ -1,6 +1,7 @@
 // 執筆画面のローカルサーバー。
 //   pnpm write → http://localhost:8090
 // 原稿は src/posts/<名前>/index.md に直接保存する。画像も同じフォルダに置く。
+// 下書きは front matter の draft: true（読み書きは lib/post.js）。
 // 消した原稿はフォルダごと .trash/<名前>-<日時>/ に移す。戻すときはフォルダを src/posts/ に戻す。
 // プレビューはサイトと同じ変換（lib/markdown.js）と CSS（src/assets/site.css）で組む。
 
@@ -12,16 +13,15 @@ import { fileURLToPath } from 'node:url';
 import { md } from '../../lib/markdown.js';
 import { kanjiDate } from '../../lib/kanji.js';
 import { ORDER_FILE, readOrder, formatOrder, sortPosts } from '../../lib/order.js';
+import { POSTS_DIR as POSTS, SLUG, parsePost, formatPost } from '../../lib/post.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const POSTS = path.join(ROOT, 'src/posts');
 const ASSETS = path.join(ROOT, 'src/assets');
 const TRASH = path.join(ROOT, '.trash');
 const PORT = Number(process.env.PORT) || 8090;
 const HOST = process.env.HOST || '127.0.0.1';
 
-const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg']);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -32,37 +32,6 @@ const TYPES = {
   '.webp': 'image/webp', '.avif': 'image/avif', '.svg': 'image/svg+xml',
 };
 
-// ---- 原稿ファイルの読み書き ----
-// front matter は title / date だけを扱う単純なもの
-function parsePost(text) {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
-  const data = {};
-  let body = text;
-  if (m) {
-    body = text.slice(m[0].length);
-    for (const line of m[1].split(/\r?\n/)) {
-      const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
-      if (!kv) continue;
-      let v = kv[2].trim();
-      if (v.startsWith('"')) { try { v = JSON.parse(v); } catch {} }
-      else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1).replace(/''/g, "'");
-      data[kv[1]] = v;
-    }
-  }
-  return {
-    title: String(data.title ?? ''),
-    date: data.date ? String(data.date).slice(0, 10) : '',
-    body: body.replace(/^\n+/, ''),
-  };
-}
-
-function formatPost({ title, date, body }) {
-  const lines = ['---', `title: ${JSON.stringify(title || '')}`];
-  if (date) lines.push(`date: ${date}`);
-  lines.push('---', '', String(body || '').replace(/\r/g, '').replace(/\s*$/, ''), '');
-  return lines.join('\n');
-}
-
 async function listPosts() {
   let names = [];
   try { names = await readdir(POSTS); } catch { return []; }
@@ -71,7 +40,7 @@ async function listPosts() {
     if (!SLUG.test(name)) continue;
     try {
       const p = parsePost(await readFile(path.join(POSTS, name, 'index.md'), 'utf8'));
-      out.push({ slug: name, title: p.title, date: p.date });
+      out.push({ slug: name, title: p.title, date: p.date, draft: p.draft });
     } catch {}
   }
   return sortPosts(out, readOrder(), (p) => p.slug, (p) => Date.parse(p.date) || 0);

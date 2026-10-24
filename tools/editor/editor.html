@@ -90,6 +90,8 @@ html[data-view="view"] .write { display: none; }
 .slug { display: flex; align-items: center; gap: 0.15em; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0; }
 .slug-in { font: inherit; color: var(--ink); background: none; border: 0; border-bottom: 1px dotted var(--rule); padding: 0; inline-size: 12em; }
 .slug-in[readonly] { border-bottom-color: transparent; color: inherit; }
+.draft { display: flex; align-items: center; gap: 0.35em; cursor: pointer; }
+.draft input { margin: 0; accent-color: var(--ink-soft); }
 textarea {
   font: 1rem/2 var(--mincho);
   letter-spacing: 0.04em;
@@ -160,6 +162,8 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
 .list .open:hover span:first-child { text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
 .list .open[aria-current="true"] { font-weight: 600; }
 .list .s { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); flex: none; }
+.list .d { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--ink-soft); flex: none; margin-left: auto; }
+.list .open[data-draft="true"] span:first-child { color: var(--ink-soft); }
 .list .mv {
   flex: none; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%;
   display: grid; place-items: center; background: none; color: var(--ink-soft); cursor: pointer;
@@ -234,6 +238,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
           <div class="sub">
             <input class="date-in" id="date" type="date" aria-label="日付">
             <label class="slug"><span aria-hidden="true">posts/</span><input class="slug-in" id="slug" type="text" placeholder="名前" aria-label="原稿の名前（URL）" autocomplete="off" spellcheck="false"></label>
+            <label class="draft" title="下書きの原稿は公開しません"><input id="draft" type="checkbox">下書き</label>
           </div>
         </div>
         <textarea id="body" aria-label="本文" placeholder="本文" spellcheck="false"></textarea>
@@ -253,7 +258,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var title = $('title'), date = $('date'), slugIn = $('slug'), body = $('body');
+  var title = $('title'), date = $('date'), slugIn = $('slug'), body = $('body'), draft = $('draft');
   var statusEl = $('status'), frame = $('preview');
   var SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
   var current = { slug: null, saved: true };
@@ -331,15 +336,18 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     }
     setStatus('保存しています');
     var at = edits;
-    return api('PUT', '/api/posts/' + slug, { title: title.value, date: date.value, body: body.value })
+    var isDraft = draft.checked;
+    return api('PUT', '/api/posts/' + slug, { title: title.value, date: date.value, draft: isDraft, body: body.value })
       .then(function () {
         var first = !current.slug;
+        var p = posts.find(function (x) { return x.slug === slug; });
         current.slug = slug;
         current.saved = edits === at;
         slugIn.readOnly = true;
         try { localStorage.setItem('editor-last', slug); } catch (e) {}
         setStatus(current.saved ? '保存しました' : '書いています');
         if (first) { loadList(); render(); }
+        else if (p && p.draft !== isDraft) loadList();
         return true;
       })
       .catch(function (e) { setStatus(e.message, true); return false; });
@@ -354,6 +362,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     saveTimer = setTimeout(save, 1200);
   }
   [title, date, body].forEach(function (el) { el.addEventListener('input', changed); });
+  draft.addEventListener('change', changed);
   slugIn.addEventListener('input', function () {
     slugIn.value = slugIn.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     changed();
@@ -370,6 +379,7 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     body.value = p.body || '';
     slugIn.value = p.slug || '';
     slugIn.readOnly = !!p.slug;
+    draft.checked = !!p.draft;
     current = { slug: p.slug || null, saved: true };
     count();
     render();
@@ -386,7 +396,8 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
     }).catch(function (e) { setStatus(e.message, true); });
   }
   function newPost() {
-    fill({ title: '', date: today(), body: '', slug: '' });
+    // 新しい原稿は下書きから始める。公開するときに外す
+    fill({ title: '', date: today(), body: '', slug: '', draft: true });
     setStatus('新しい原稿');
     title.focus();
   }
@@ -408,9 +419,13 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
         b.type = 'button';
         b.className = 'open';
         b.dataset.slug = p.slug;
+        b.dataset.draft = String(!!p.draft);
         var t = document.createElement('span'); t.textContent = p.title || '（題なし）';
         var s = document.createElement('span'); s.className = 's'; s.textContent = p.slug;
-        b.append(t, s);
+        if (p.draft) {
+          var d = document.createElement('span'); d.className = 'd'; d.textContent = '下書き';
+          b.append(t, d, s);
+        } else b.append(t, s);
         b.addEventListener('click', function () {
           closePops();
           var go = function () { openPost(p.slug); };
@@ -529,7 +544,11 @@ html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
   var deployBtn = $('deploy-btn');
   deployBtn.addEventListener('click', function () {
     closePops();
-    if (!confirm('サイトを公開しますか？\nsrc/posts/ のすべての原稿が公開されます。')) return;
+    // 開いている原稿は、画面の「下書き」の状態で数える（公開の前に保存する）
+    var isDraft = function (p) { return p.slug === current.slug ? draft.checked : !!p.draft; };
+    var n = posts.filter(function (p) { return !isDraft(p); }).length;
+    var m = posts.length - n;
+    if (!confirm('サイトを公開しますか？\n' + kanjiNum(n) + '本の原稿を公開します' + (m ? '（下書きの' + kanjiNum(m) + '本は出しません）' : '') + '。')) return;
     deployBtn.disabled = true;
     save().then(function () {
       setStatus('公開しています');
