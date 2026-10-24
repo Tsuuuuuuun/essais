@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ja" data-view="write">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>執筆</title>
+<script>
+  // 組方は原稿とプレビューで共通。端末の記憶、既定（縦組）の順に決める。描画の前に決めてちらつきを防ぐ
+  (function () {
+    var m = null;
+    try { m = localStorage.getItem('editor-kumi'); } catch (e) {}
+    if (m !== 'yoko') document.documentElement.classList.add('tate');
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600&display=swap">
+<style>
+/* 左に原稿、右にプレビュー。狭い画面では一面にして、書く／見るを切り替える。 */
+:root {
+  --paper: #fcfbf8;
+  --desk: #f5f3ee;
+  --ink: #26241f;
+  --ink-soft: #77736a;
+  --rule: #e2ded5;
+  --mincho: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #1a1916; --desk: #151412; --ink: #dcd8cf; --ink-soft: #8f8a80; --rule: #34322d; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mincho);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bar {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-block: 0.5rem;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.bar .spacer { flex: 1; }
+.ico {
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--ink-soft); cursor: pointer;
+}
+.ico:hover, .ico[aria-pressed="true"], .ico[aria-expanded="true"] { color: var(--ink); }
+.ico svg { width: 1.1rem; height: 1.1rem; display: block; }
+.ico:focus-visible, textarea:focus-visible, input:focus-visible, button:focus-visible { outline: 1px solid var(--ink-soft); outline-offset: 3px; }
+.desk { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; }
+.pane { min-width: 0; min-height: 0; position: relative; }
+.write {
+  overflow-y: auto;
+  padding-block: 6vh 10vh;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: 16px;
+}
+.view { background: var(--desk); }
+html[data-view="write"] .view { display: none; }
+html[data-view="view"] .write { display: none; }
+.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--desk); }
+
+.sheet { max-inline-size: 34em; margin-inline: auto; display: flex; flex-direction: column; gap: 2em; }
+.meta { display: flex; flex-direction: column; gap: 0.6em; }
+.title-in {
+  font: 600 1.35rem/1.6 var(--mincho);
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  background: none; border: 0; padding: 0; inline-size: 100%;
+}
+.title-in::placeholder, textarea::placeholder, .slug-in::placeholder { color: var(--ink-soft); opacity: 0.6; }
+.sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 1.5em; font-size: 0.8rem; letter-spacing: 0.06em; color: var(--ink-soft); }
+.date-in { font: inherit; color: inherit; background: none; border: 0; padding: 0; }
+.slug { display: flex; align-items: center; gap: 0.15em; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0; }
+.slug-in { font: inherit; color: var(--ink); background: none; border: 0; border-bottom: 1px dotted var(--rule); padding: 0; inline-size: 12em; }
+.slug-in[readonly] { border-bottom-color: transparent; color: inherit; }
+textarea {
+  font: 1rem/2 var(--mincho);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  inline-size: 100%;
+  min-block-size: 60vh;
+  resize: none;
+  field-sizing: content;
+}
+.write.dragging textarea { outline: 1px dashed var(--ink-soft); outline-offset: 8px; }
+
+/* 縦組の原稿。行の長さを画面の高さに合わせ、右から左へ書き進める（横にスクロール） */
+html.tate .write {
+  writing-mode: vertical-rl;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 5vh max(16px, 10vw) 5vh max(16px, 8vw);
+  scrollbar-width: thin;
+}
+html.tate .sheet { block-size: 100%; }
+html.tate textarea { letter-spacing: 0.06em; min-block-size: 50vw; }
+
+.foot {
+  flex: none;
+  display: flex;
+  gap: 1.25em;
+  align-items: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--rule);
+  padding-block: 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.foot .status { margin-left: auto; }
+.foot .status.warn { color: var(--ink); }
+
+/* 浮かぶ小窓（原稿の一覧と記法） */
+.pop {
+  position: absolute;
+  top: 3rem;
+  z-index: 5;
+  width: min(20rem, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  line-height: 1.8;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+}
+.pop h2 { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.2em; margin: 0 0 0.75em; color: var(--ink-soft); }
+.pop.left { left: max(12px, env(safe-area-inset-left, 0px)); }
+.pop.right { right: max(12px, env(safe-area-inset-right, 0px)); }
+.list { list-style: none; margin: 0 0 0.75em; padding: 0; display: flex; flex-direction: column; }
+.list li { display: flex; align-items: center; gap: 0.25em; }
+.list .open {
+  flex: 1; min-width: 0; text-align: left;
+  font: inherit; color: var(--ink); background: none; border: 0; padding: 0.35em 0; cursor: pointer;
+  display: flex; justify-content: space-between; gap: 1em;
+}
+.list .open:hover span:first-child { text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+.list .open[aria-current="true"] { font-weight: 600; }
+.list .s { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); flex: none; }
+.list .mv {
+  flex: none; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: none; color: var(--ink-soft); cursor: pointer;
+}
+.list .mv:hover { color: var(--ink); }
+.list .mv:disabled { visibility: hidden; }
+.list .mv svg { width: 12px; height: 12px; }
+.list .grip {
+  flex: none; width: 1rem; align-self: stretch; display: grid; place-items: center;
+  color: var(--ink-soft); cursor: grab; touch-action: none;
+}
+.list .grip:hover { color: var(--ink); }
+.list .grip svg { width: 10px; height: 14px; }
+.list li.dragging { background: var(--desk); border-radius: 4px; }
+.list li.dragging .grip { cursor: grabbing; }
+.new { font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer; border-top: 1px solid var(--rule); padding-top: 0.75em; width: 100%; text-align: left; }
+.new:hover { color: var(--ink); }
+.del { font: inherit; font-size: 0.8rem; color: var(--ink-soft); background: none; border: 0; padding: 0.5em 0 0; cursor: pointer; width: 100%; text-align: left; }
+.del:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+.notes dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35em 1em; }
+.notes dt { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); white-space: nowrap; }
+.notes dd { margin: 0; color: var(--ink-soft); }
+.notes p { margin: 0.75em 0 0; color: var(--ink-soft); font-size: 0.8rem; }
+
+</style>
+</head>
+<body>
+  <header class="bar">
+    <button type="button" class="ico" id="list-btn" aria-expanded="false" aria-controls="list-pop" aria-label="原稿の一覧" title="原稿の一覧"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h8"/></svg></button>
+    <span class="spacer"></span>
+    <button type="button" class="ico" id="view-btn" aria-pressed="false" aria-label="組み上がりを見る" title="組み上がりを見る"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4.5v10M9 4.5C7.5 3.5 5 3 2.5 3.5v10C5 13 7.5 13.5 9 14.5M9 4.5c1.5-1 4-1.5 6.5-1v10c-2.5-.5-5 0-6.5 1"/></svg></button>
+    <button type="button" class="ico" id="kumi-btn" aria-label="横組にする" title="横組にする"><svg class="to-yoko" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h13M2.5 9h13M2.5 14h7"/></svg><svg class="to-tate" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true" hidden><path d="M14 2.5v13M9 2.5v13M4 2.5v7"/></svg></button>
+    <button type="button" class="ico" id="notes-btn" aria-expanded="false" aria-controls="notes" aria-label="記法" title="記法"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.8a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7v.3"/><path d="M9 13.6v.1"/></svg></button>
+
+    <div class="pop left" id="list-pop" hidden>
+      <h2>原稿</h2>
+      <ul class="list" id="list"></ul>
+      <button type="button" class="new" id="new-btn">新しく書く</button>
+      <button type="button" class="del" id="del-btn" hidden>開いている原稿を消す</button>
+    </div>
+
+    <div class="pop right notes" id="notes" hidden>
+      <h2>記法</h2>
+      <dl>
+        <dt>{漢字|かんじ}</dt><dd>ルビ</dd>
+        <dt>{東京|とう|きょう}</dt><dd>一字ずつのルビ</dd>
+        <dt>^12^</dt><dd>縦中横（三字まで）</dd>
+        <dt>*語*</dt><dd>強調（傍点）</dd>
+        <dt>空行</dt><dd>段落の区切り</dd>
+        <dt>## 題</dt><dd>見出し（番号が付く）</dd>
+        <dt>---</dt><dd>場面の区切り（＊）</dd>
+        <dt>&gt; 文</dt><dd>引用（二字下げ）</dd>
+        <dt>&gt; ――出典</dt><dd>引用の出典</dd>
+        <dt>- 項目</dt><dd>箇条書き（・）</dd>
+        <dt>1. 項目</dt><dd>番号付きの箇条書き</dd>
+        <dt>文[^1]</dt><dd>注の番号</dd>
+        <dt>[^1]: 注の文</dt><dd>注の中身（空行まで）。URL はリンクになる</dd>
+        <dt>![説明](画像)</dt><dd>図（押すと開く）</dd>
+        <dt>ＮＨＫ</dt><dd>全角は縦組で正立、横組では半角</dd>
+        <dt>Typography</dt><dd>半角は縦組で横倒し</dd>
+      </dl>
+      <p>和文と英字の間のスペースは要りません。空きは組版で付きます。画像は原稿の欄に落とすか貼り付けると、記事のフォルダに保存されます。保存は ⌘S / Ctrl+S でも。</p>
+    </div>
+  </header>
+
+  <div class="desk">
+    <section class="pane write" id="write" aria-label="原稿">
+      <div class="sheet">
+        <div class="meta">
+          <input class="title-in" id="title" type="text" placeholder="題" aria-label="題">
+          <div class="sub">
+            <input class="date-in" id="date" type="date" aria-label="日付">
+            <label class="slug"><span aria-hidden="true">posts/</span><input class="slug-in" id="slug" type="text" placeholder="名前" aria-label="原稿の名前（URL）" autocomplete="off" spellcheck="false"></label>
+          </div>
+        </div>
+        <textarea id="body" aria-label="本文" placeholder="本文" spellcheck="false"></textarea>
+      </div>
+    </section>
+    <section class="pane view" aria-label="組み上がり">
+      <iframe id="preview" src="/preview" title="組み上がり"></iframe>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <span id="count">〇字</span>
+    <span id="sheets">原稿用紙一枚</span>
+    <span class="status" id="status" role="status"></span>
+  </footer>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var title = $('title'), date = $('date'), slugIn = $('slug'), body = $('body');
+  var statusEl = $('status'), frame = $('preview');
+  var SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  var current = { slug: null, saved: true };
+  var posts = [];
+
+  function setStatus(t, warn) { statusEl.textContent = t; statusEl.classList.toggle('warn', !!warn); }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function api(method, url, data, raw) {
+    return fetch(url, {
+      method: method,
+      headers: raw ? {} : { 'Content-Type': 'application/json' },
+      body: raw ? data : (data === undefined ? undefined : JSON.stringify(data)),
+    }).then(function (r) {
+      return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'うまくいきませんでした'); return j; });
+    });
+  }
+
+  // ---- 字数と原稿用紙の枚数（記法の記号、ルビの読み、注、図は数えない） ----
+  var KANJI = '〇一二三四五六七八九';
+  function kanjiNum(n) { return String(n).replace(/[0-9]/g, function (d) { return KANJI[+d]; }); }
+  function count() {
+    var plain = body.value
+      .replace(/^\[\^[^\]\s]+\]:(?:.*\S.*(?:\n|$))+/gm, '')
+      .replace(/\[\^[^\]\s]+\]/g, '')
+      .replace(/!\[[^\[\]]*\]\([^)]*\)/g, '')
+      .replace(/\{([^{}|]+)\|[^{}]+\}/g, '$1')
+      .replace(/\^([^^\n]{1,3})\^/g, '$1')
+      .replace(/^>\s?/gm, '')
+      .replace(/^([*\-_]\s*){3,}$/gm, '')
+      .replace(/\*\*?([^*\n]+)\*\*?/g, '$1')
+      .replace(/\s/g, '');
+    var n = Array.from(plain).length;
+    $('count').textContent = kanjiNum(n) + '字';
+    $('sheets').textContent = '原稿用紙' + kanjiNum(Math.max(1, Math.ceil(n / 400))) + '枚';
+  }
+
+  // ---- プレビュー ----
+  var previewReady = false, renderTimer = null, renderSeq = 0;
+  frame.addEventListener('load', function () { previewReady = true; applyKumi(); render(); });
+  function pdoc() { return frame.contentDocument; }
+  function render() {
+    if (!previewReady) return;
+    var seq = ++renderSeq;
+    api('POST', '/api/render', { title: title.value, date: date.value, body: body.value }).then(function (r) {
+      if (seq !== renderSeq) return;
+      var d = pdoc();
+      d.getElementById('base').setAttribute('href', '/posts/' + (current.slug || slugIn.value || '_') + '/');
+      d.getElementById('out').innerHTML = r.html;
+      var w = frame.contentWindow;
+      if (w.hon) w.hon.refresh();
+    }).catch(function (e) { setStatus(e.message, true); });
+  }
+  function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 200); }
+
+  // ---- 保存 ----
+  // 保存は一度に一つずつ。保存の途中に書き足した分は、保存し終えても「保存していない」のままにする
+  var saveTimer = null, saving = Promise.resolve(true), edits = 0;
+  function save() {
+    clearTimeout(saveTimer);
+    saving = saving.then(saveNow, saveNow);
+    return saving;
+  }
+  function saveNow() {
+    var slug = current.slug || slugIn.value.trim();
+    if (!SLUG.test(slug)) {
+      setStatus('名前（半角の英小文字・数字・ハイフン）を付けると保存できます', true);
+      return Promise.resolve(false);
+    }
+    if (!current.slug && posts.some(function (p) { return p.slug === slug; })) {
+      setStatus('その名前の原稿はもうあります', true);
+      return Promise.resolve(false);
+    }
+    setStatus('保存しています');
+    var at = edits;
+    return api('PUT', '/api/posts/' + slug, { title: title.value, date: date.value, body: body.value })
+      .then(function () {
+        var first = !current.slug;
+        current.slug = slug;
+        current.saved = edits === at;
+        slugIn.readOnly = true;
+        try { localStorage.setItem('editor-last', slug); } catch (e) {}
+        setStatus(current.saved ? '保存しました' : '書いています');
+        if (first) { loadList(); render(); }
+        return true;
+      })
+      .catch(function (e) { setStatus(e.message, true); return false; });
+  }
+  function changed() {
+    edits++;
+    current.saved = false;
+    count();
+    scheduleRender();
+    setStatus('書いています');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 1200);
+  }
+  [title, date, body].forEach(function (el) { el.addEventListener('input', changed); });
+  slugIn.addEventListener('input', function () {
+    slugIn.value = slugIn.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    changed();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+  });
+  window.addEventListener('beforeunload', function (e) { if (!current.saved) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---- 原稿を開く・新しく書く ----
+  function fill(p) {
+    title.value = p.title || '';
+    date.value = p.date || today();
+    body.value = p.body || '';
+    slugIn.value = p.slug || '';
+    slugIn.readOnly = !!p.slug;
+    current = { slug: p.slug || null, saved: true };
+    count();
+    render();
+    var w = frame.contentWindow;
+    if (w && w.hon) setTimeout(function () { w.hon.toStart(); }, 50);
+    writeToStart();
+    markCurrent();
+  }
+  function openPost(slug) {
+    return api('GET', '/api/posts/' + slug).then(function (p) {
+      fill(p);
+      try { localStorage.setItem('editor-last', slug); } catch (e) {}
+      setStatus('開きました');
+    }).catch(function (e) { setStatus(e.message, true); });
+  }
+  function newPost() {
+    fill({ title: '', date: today(), body: '', slug: '' });
+    setStatus('新しい原稿');
+    title.focus();
+  }
+  function markCurrent() {
+    $('del-btn').hidden = !current.slug;
+    document.querySelectorAll('#list .open').forEach(function (b) {
+      b.setAttribute('aria-current', b.dataset.slug === current.slug ? 'true' : 'false');
+    });
+  }
+  function loadList() {
+    return api('GET', '/api/posts').then(function (list) {
+      posts = list;
+      var ul = $('list');
+      ul.innerHTML = '';
+      list.forEach(function (p) {
+        var li = document.createElement('li');
+        li.dataset.slug = p.slug;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'open';
+        b.dataset.slug = p.slug;
+        var t = document.createElement('span'); t.textContent = p.title || '（題なし）';
+        var s = document.createElement('span'); s.className = 's'; s.textContent = p.slug;
+        b.append(t, s);
+        b.addEventListener('click', function () {
+          closePops();
+          var go = function () { openPost(p.slug); };
+          if (!current.saved) save().then(go); else go();
+        });
+        li.append(grip(li), b, moveButton(li, -1, p), moveButton(li, 1, p));
+        ul.appendChild(li);
+      });
+      markCurrent();
+      markEnds();
+      return list;
+    });
+  }
+
+  // ---- 並び替え：一覧の順が目次の順。src/posts/order.json に名前を並べて覚える ----
+  var UP = '<path d="M4 11l5-5 5 5"/>', DOWN = '<path d="M4 7l5 5 5-5"/>';
+  function moveButton(li, dir, p) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv';
+    b.dataset.dir = dir;
+    var t = '「' + (p.title || p.slug) + '」を' + (dir < 0 ? '上へ' : '下へ');
+    b.setAttribute('aria-label', t);
+    b.title = t;
+    b.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (dir < 0 ? UP : DOWN) + '</svg>';
+    // 行ごと差し替えると押したボタンが外れて小窓が閉じるので、行を動かすだけにする
+    b.addEventListener('click', function () {
+      var ul = li.parentNode;
+      if (dir < 0 && li.previousElementSibling) ul.insertBefore(li, li.previousElementSibling);
+      else if (dir > 0 && li.nextElementSibling) ul.insertBefore(li.nextElementSibling, li);
+      else return;
+      markEnds();
+      if (b.disabled) li.querySelector('.mv:not(:disabled)').focus();
+      saveOrder();
+    });
+    return b;
+  }
+  // つまみ（ハンドル）をドラッグして並び替え。マウスでもタッチでも動くようポインタで処理（キーボードは矢印ボタンで操作）
+  function grip(li) {
+    var g = document.createElement('span');
+    g.className = 'grip';
+    g.title = 'ドラッグで並び替え';
+    g.innerHTML = '<svg viewBox="0 0 10 14" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.1"/><circle cx="7" cy="3" r="1.1"/><circle cx="3" cy="7" r="1.1"/><circle cx="7" cy="7" r="1.1"/><circle cx="3" cy="11" r="1.1"/><circle cx="7" cy="11" r="1.1"/></svg>';
+    var before = null;
+    g.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      g.setPointerCapture(e.pointerId);
+      before = li.nextElementSibling;
+      li.classList.add('dragging');
+    });
+    g.addEventListener('pointermove', function (e) {
+      if (!li.classList.contains('dragging')) return;
+      var ul = li.parentNode, pop = $('list-pop'), y = e.clientY;
+      // 小窓の上下端に近づいたときは自動スクロール
+      var box = pop.getBoundingClientRect();
+      if (y < box.top + 24) pop.scrollTop -= 8;
+      else if (y > box.bottom - 24) pop.scrollTop += 8;
+      var next = Array.prototype.find.call(ul.children, function (o) {
+        if (o === li) return false;
+        var r = o.getBoundingClientRect();
+        return y < r.top + r.height / 2;
+      }) || null;
+      if (next !== li.nextElementSibling) ul.insertBefore(li, next);
+    });
+    function drop() {
+      if (!li.classList.contains('dragging')) return;
+      li.classList.remove('dragging');
+      if (li.nextElementSibling === before) return;
+      markEnds();
+      saveOrder();
+    }
+    g.addEventListener('pointerup', drop);
+    g.addEventListener('pointercancel', drop);
+    return g;
+  }
+  function markEnds() {
+    var items = document.querySelectorAll('#list li');
+    items.forEach(function (li, i) {
+      li.querySelector('.mv[data-dir="-1"]').disabled = i === 0;
+      li.querySelector('.mv[data-dir="1"]').disabled = i === items.length - 1;
+    });
+  }
+  function saveOrder() {
+    var slugs = Array.prototype.map.call(document.querySelectorAll('#list li'), function (li) { return li.dataset.slug; });
+    posts.sort(function (a, b) { return slugs.indexOf(a.slug) - slugs.indexOf(b.slug); });
+    return api('PUT', '/api/order', slugs)
+      .then(function () { setStatus('並びを変えました'); })
+      .catch(function (e) { setStatus(e.message, true); });
+  }
+  $('new-btn').addEventListener('click', function () {
+    closePops();
+    if (!current.saved) save().then(newPost); else newPost();
+  });
+
+  // 消す。保存待ちを止めてから消し、一覧の次の原稿を開く（無ければ新しく書く）
+  $('del-btn').addEventListener('click', function () {
+    var slug = current.slug;
+    if (!slug) return;
+    var p = posts.find(function (x) { return x.slug === slug; });
+    closePops();
+    if (!confirm('「' + ((p && p.title) || title.value || slug) + '」を消しますか？\n原稿のフォルダは .trash に移ります。')) return;
+    clearTimeout(saveTimer);
+    saving.then(function () {
+      return api('DELETE', '/api/posts/' + slug);
+    }).then(function () {
+      try { localStorage.removeItem('editor-last'); } catch (e) {}
+      return loadList();
+    }).then(function (list) {
+      if (list[0]) openPost(list[0].slug).then(function () { setStatus('消しました'); });
+      else { newPost(); setStatus('消しました'); }
+    }).catch(function (e) { setStatus(e.message, true); });
+  });
+
+  // ---- 画像：原稿欄へのドラッグ＆ドロップや貼り付けで、記事フォルダに保存して記法を挿入 ----
+  function insertAt(text) {
+    var a = body.selectionStart, z = body.selectionEnd;
+    body.value = body.value.slice(0, a) + text + body.value.slice(z);
+    body.selectionStart = body.selectionEnd = a + text.length;
+    changed();
+  }
+  function uploadImages(files) {
+    var imgs = Array.prototype.filter.call(files || [], function (f) { return /^image\//.test(f.type); });
+    if (!imgs.length) return false;
+    var ready = current.slug ? Promise.resolve(true) : save();
+    ready.then(function (ok) {
+      if (!ok) { setStatus('画像を置く前に、原稿に名前を付けてください', true); return; }
+      setStatus('画像を置いています');
+      imgs.reduce(function (p, f) {
+        return p.then(function () {
+          var name = f.name && /\.[a-z0-9]+$/i.test(f.name) ? f.name : 'image.' + (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+          return api('POST', '/api/posts/' + current.slug + '/images?name=' + encodeURIComponent(name), f, true)
+            .then(function (r) { insertAt('![' + name.replace(/\.[^.]+$/, '') + '](' + r.name + ')'); });
+        });
+      }, Promise.resolve()).then(function () { setStatus('画像を置きました'); })
+        .catch(function (e) { setStatus(e.message, true); });
+    });
+    return true;
+  }
+  var writePane = $('write');
+  body.addEventListener('dragover', function (e) {
+    if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.items || [], function (i) { return i.kind === 'file'; })) {
+      e.preventDefault();
+      writePane.classList.add('dragging');
+    }
+  });
+  body.addEventListener('dragleave', function () { writePane.classList.remove('dragging'); });
+  body.addEventListener('drop', function (e) {
+    writePane.classList.remove('dragging');
+    if (uploadImages(e.dataTransfer && e.dataTransfer.files)) e.preventDefault();
+  });
+  body.addEventListener('paste', function (e) {
+    if (uploadImages(e.clipboardData && e.clipboardData.files)) e.preventDefault();
+  });
+
+  // ---- 組方：原稿とプレビューで共通。選んだ組方は端末に覚えておく ----
+  var kumiBtn = $('kumi-btn');
+  function isTate() { return document.documentElement.classList.contains('tate'); }
+  function applyKumi() {
+    var tate = isTate();
+    kumiBtn.querySelector('.to-yoko').hidden = !tate;
+    kumiBtn.querySelector('.to-tate').hidden = tate;
+    var t = tate ? '横組にする' : '縦組にする';
+    kumiBtn.setAttribute('aria-label', t);
+    kumiBtn.title = t;
+    if (!previewReady) return;
+    pdoc().documentElement.classList.toggle('tate', tate);
+    var w = frame.contentWindow;
+    if (w.hon) { w.hon.refresh(); w.hon.toStart(); }
+  }
+  // 縦組は右端が冒頭。ブラウザによって scrollLeft の向きが違うので、大きな値を入れて右端に寄せる
+  function writeToStart() {
+    writePane.scrollTop = 0;
+    writePane.scrollLeft = isTate() ? writePane.scrollWidth : 0;
+  }
+  kumiBtn.addEventListener('click', function () {
+    var tate = document.documentElement.classList.toggle('tate');
+    try { localStorage.setItem('editor-kumi', tate ? 'tate' : 'yoko'); } catch (e) {}
+    applyKumi();
+    writeToStart();
+  });
+  // 縦組ではホイールの縦の動きを横送りにする
+  writePane.addEventListener('wheel', function (e) {
+    if (!isTate()) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { writePane.scrollLeft -= e.deltaY; e.preventDefault(); }
+  }, { passive: false });
+  applyKumi();
+
+  // ---- 書く／見る ----
+  var viewBtn = $('view-btn');
+  viewBtn.addEventListener('click', function () {
+    var root = document.documentElement;
+    var v = root.dataset.view === 'write' ? 'view' : 'write';
+    root.dataset.view = v;
+    viewBtn.setAttribute('aria-pressed', v === 'view');
+    var t = v === 'view' ? '原稿に戻る' : '組み上がりを見る';
+    viewBtn.setAttribute('aria-label', t);
+    viewBtn.title = t;
+    var w = frame.contentWindow;
+    if (v === 'view' && w.hon) requestAnimationFrame(w.hon.toStart);
+  });
+
+  // ---- 小窓 ----
+  var pops = [[$('list-btn'), $('list-pop')], [$('notes-btn'), $('notes')]];
+  function closePops() { pops.forEach(function (p) { p[1].hidden = true; p[0].setAttribute('aria-expanded', 'false'); }); }
+  pops.forEach(function (p) {
+    p[0].addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = p[1].hidden;
+      closePops();
+      p[1].hidden = !open;
+      p[0].setAttribute('aria-expanded', String(open));
+    });
+  });
+  document.addEventListener('click', function (e) {
+    if (!pops.some(function (p) { return p[1].contains(e.target); })) closePops();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePops(); });
+
+  // ---- はじめに ----
+  loadList().then(function (list) {
+    var last = null;
+    try { last = localStorage.getItem('editor-last'); } catch (e) {}
+    var target = list.find(function (p) { return p.slug === last; }) || list[0];
+    if (target) openPost(target.slug); else newPost();
+  }).catch(function (e) { setStatus(e.message, true); });
+})();
+</script>
+</body>
+</html>

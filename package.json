@@ -1,0 +1,21 @@
+{
+  "name": "essais",
+  "private": true,
+  "type": "module",
+  "description": "本文だけの、書籍のように読めるサイト",
+  "scripts": {
+    "dev": "eleventy --serve",
+    "build": "eleventy",
+    "write": "node tools/editor/server.js",
+    "deploy": "eleventy && node scripts/deploy.mjs",
+    "backup": "node scripts/backup.mjs"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^3.1.7",
+    "markdown-it": "^14.3.3"
+  }
+}

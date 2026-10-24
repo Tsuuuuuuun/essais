@@ -1,0 +1,10 @@
+---
+layout: base.njk
+---
+<article>
+  {% include "kumi.njk" %}
+  <h1>{{ title | inlineMd | safe }}</h1>
+  {{ content | safe }}
+  <p class="colophon">{{ page.date | kanjiDate }}</p>
+  <p class="back"><a href="/" data-kumi>目次へ</a></p>
+</article>

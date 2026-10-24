@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420">
+  <rect width="640" height="420" fill="#e9e5dc"/>
+  <!-- 原稿：横に書いた行 -->
+  <rect x="40" y="60" width="240" height="300" fill="#fcfbf8"/>
+  <g fill="#77736a">
+    <rect x="70" y="100" width="180" height="4"/>
+    <rect x="70" y="124" width="180" height="4"/>
+    <rect x="70" y="148" width="120" height="4"/>
+    <rect x="70" y="188" width="180" height="4"/>
+    <rect x="70" y="212" width="180" height="4"/>
+    <rect x="70" y="236" width="180" height="4"/>
+    <rect x="70" y="260" width="90" height="4"/>
+  </g>
+  <!-- 矢印 -->
+  <path d="M300 210h40" stroke="#77736a" stroke-width="3" fill="none"/>
+  <path d="M334 200l12 10-12 10" stroke="#77736a" stroke-width="3" fill="none" stroke-linejoin="round"/>
+  <!-- 組み上がり：縦組の頁 -->
+  <rect x="360" y="60" width="240" height="300" fill="#fcfbf8"/>
+  <rect x="562" y="90" width="8" height="60" fill="#26241f"/>
+  <g fill="#77736a">
+    <rect x="532" y="90" width="4" height="240"/>
+    <rect x="512" y="90" width="4" height="240"/>
+    <rect x="492" y="90" width="4" height="160"/>
+    <rect x="462" y="104" width="4" height="226"/>
+    <rect x="442" y="90" width="4" height="240"/>
+    <rect x="422" y="90" width="4" height="240"/>
+    <rect x="402" y="90" width="4" height="120"/>
+  </g>
+</svg>

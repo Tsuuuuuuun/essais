@@ -1,0 +1,232 @@
+/* 本文だけの頁
+   html に .tate が付くと縦組、無ければ横組。どちらも明朝の一段組で、本文以外の要素は置かない。 */
+
+:root {
+  --paper: #fcfbf8;
+  --ink: #26241f;
+  --ink-soft: #77736a;
+  --rule: #dcd8cf;
+  --veil: rgb(252 251 248 / 0.94);
+  --mincho: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1916;
+    --ink: #dcd8cf;
+    --ink-soft: #8f8a80;
+    --rule: #3a3833;
+    --veil: rgb(26 25 22 / 0.94);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mincho);
+}
+::selection { background: var(--ink); color: var(--paper); }
+a:focus-visible, button:focus-visible, main:focus-visible { outline: 1px solid var(--ink-soft); outline-offset: 4px; }
+
+/* ---------- 本文 ---------- */
+article, nav.toc {
+  font-size: 1.0625rem;
+  line-height: 2;
+  letter-spacing: 0.04em;
+  line-break: strict;
+  hanging-punctuation: allow-end;
+  text-spacing-trim: trim-start;
+}
+h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: 0.12em; line-height: 1.6; }
+p { margin: 0; text-indent: 1em; }
+.break { color: var(--ink-soft); text-indent: 0; text-align: center; }
+.colophon { color: var(--ink-soft); font-size: 0.85rem; text-indent: 0; }
+.back { font-size: 0.85rem; text-indent: 0; }
+.back a { color: var(--ink-soft); text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+
+/* 見出し：本文と同じ大きさの太字で三字下げ、前に二行・後ろに一行の空き（後ろの本文に付いて見えるように）。番号の後ろに一字空ける */
+h2 { margin: 0; margin-block: 2em 1em; padding-inline-start: 3em; font-size: 1em; font-weight: 600; line-height: inherit; letter-spacing: 0.08em; }
+h2 .no { margin-inline-end: 1em; letter-spacing: 0; }
+html:not(.tate) h2 .no { color: var(--ink-soft); }
+
+/* ルビ・縦中横 */
+rt { font-size: 0.5em; letter-spacing: 0; }
+.tcy { text-combine-upright: all; }
+
+/* 強調は傍点（ゴマ点）。縦組では右、横組では上 */
+em {
+  font-style: normal;
+  -webkit-text-emphasis: filled sesame;
+  text-emphasis: filled sesame;
+  -webkit-text-emphasis-position: over right;
+  text-emphasis-position: over right;
+}
+
+/* 和欧間の空き（四分） */
+.ws { margin-inline-start: 0.25em; }
+.we { margin-inline-end: 0.25em; }
+/* 全角英数字は横組で半角に戻るので、そのときだけ空きを付ける */
+html:not(.tate) .zen.zws { margin-inline-start: 0.25em; }
+html:not(.tate) .zen.zwe { margin-inline-end: 0.25em; }
+
+/* 注番号・図番号は縦組で漢数字、横組で算用数字 */
+html.tate .na, html:not(.tate) .nk { display: none; }
+
+/* 引用：二字下げ、一回り小さく、前後に一行ずつの空き。出典は行の終わりに寄せる */
+blockquote { margin: 0; margin-block: 2em; padding-inline-start: 2em; font-size: 0.92em; }
+blockquote .src { text-indent: 0; text-align: end; color: var(--ink-soft); font-size: 0.92em; margin-block-start: 0.5em; }
+
+/* 箇条書き：前後に一行ずつの空き、記号は段落の字下げと同じ一字目に置き、二行目以降は本文の頭に揃える。
+   記号の幅（--lm-k / --lm-a）は lib/markdown.js が一覧ごとに付ける */
+.items { list-style: none; margin: 0; margin-block: 1em; padding: 0; padding-inline-start: 1em; --lm: var(--lm-a); }
+html.tate .items { --lm: var(--lm-k); }
+.items .items { margin-block: 0; padding-inline-start: 0; }
+.items li { padding-inline-start: var(--lm); }
+.items li p { text-indent: 0; }
+.lm { display: inline-block; min-inline-size: var(--lm); margin-inline-start: calc(-1 * var(--lm)); text-indent: 0; letter-spacing: 0; }
+ul.items > li > .lm, ul.items > li > p:first-child > .lm { color: var(--ink-soft); }
+
+/* 注番号と末尾の注 */
+.fnref { font-size: 0.6em; vertical-align: super; line-height: 0; margin-inline-start: 0.1em; color: var(--ink-soft); text-decoration: none; letter-spacing: 0; }
+html.tate .fnref { vertical-align: top; }
+.fnref:hover { color: var(--ink); }
+.fns { margin-block-start: 3em; font-size: 0.75em; color: var(--ink-soft); }
+.fns::before { content: ""; display: block; inline-size: 5em; border-block-start: 1px solid var(--rule); margin-block-end: 1.25em; }
+.fns ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25em; }
+.fns li { display: flex; gap: 1em; min-width: 0; min-height: 0; }
+.fns a { color: inherit; }
+.fnback { flex: none; text-decoration: none; min-inline-size: 1.5em; }
+.fnbody { min-width: 0; min-height: 0; overflow-wrap: anywhere; }
+.fnbody a { text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+html.tate .fnbody a { text-underline-position: right; }
+
+/* 図の参照。本文の中では薄い色の（図一）だけを見せる */
+.figref { font-size: 0.85em; letter-spacing: 0; color: var(--ink-soft); text-decoration: none; cursor: pointer; }
+.figref:hover { color: var(--ink); }
+/* 図そのもの。スクリプトが動く環境では窓で開くので隠し、動かない環境では末尾に並べる */
+html.js .figs { display: none; }
+.figs { margin-block-start: 3em; display: flex; flex-direction: column; gap: 2em; }
+.figs figure { margin: 0; }
+.figs img { display: block; max-width: 100%; max-height: 70vh; }
+.figs figcaption { font-size: 0.8em; color: var(--ink-soft); text-indent: 0; }
+.figs figcaption b, .lb-fig figcaption b { font-weight: 600; color: var(--ink); margin-inline-end: 1em; }
+
+/* 図を開いた窓。頁を薄く沈め、画像は画面いっぱい近くまで */
+.lightbox {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  background: var(--veil);
+  writing-mode: horizontal-tb;
+  padding-block: calc(3.5rem + env(safe-area-inset-top, 0px)) calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.lb-fig { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 100%; }
+.lb-fig img { display: block; max-width: min(100%, 1100px); max-height: calc(100vh - 9rem); object-fit: contain; box-shadow: 0 10px 40px rgb(0 0 0 / 0.12); background: var(--paper); }
+.lb-fig figcaption { max-width: 34em; font-size: 0.85rem; line-height: 1.8; letter-spacing: 0.06em; color: var(--ink-soft); text-align: center; text-wrap: balance; }
+.lb-close {
+  position: absolute;
+  top: calc(0.5rem + env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+}
+
+/* ---------- 目次へ・組方の切り替え（線だけのアイコン） ---------- */
+.tools { display: flex; }
+.toc-ico, .kumi-ico, .lb-close {
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--ink-soft); cursor: pointer;
+  transition: color 0.2s ease;
+}
+.toc-ico:hover, .kumi-ico:hover, .lb-close:hover { color: var(--ink); }
+.toc-ico svg, .kumi-ico svg, .lb-close svg { width: 1.1rem; height: 1.1rem; display: block; }
+.kumi-ico .to-yoko { display: none; }
+html.tate .kumi-ico .to-tate { display: none; }
+html.tate .kumi-ico .to-yoko { display: block; }
+/* 目次へのアイコンは、いまの組方での目次の並びを描く */
+.toc-ico .in-tate { display: none; }
+html.tate .toc-ico .in-yoko { display: none; }
+html.tate .toc-ico .in-tate { display: block; }
+html:not(.js) .tools { display: none; }
+/* 押すと何が起きるかを添える札。title の既定の札は出るまで遅いので、自前で出す。
+   横組では下に、縦組では（下に並ぶアイコンに重ならないよう）左に出す */
+.toc-ico, .kumi-ico { position: relative; }
+.toc-ico::after, .kumi-ico::after {
+  content: attr(data-tip);
+  position: absolute; z-index: 10;
+  writing-mode: horizontal-tb;
+  white-space: nowrap;
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--rule); border-radius: 3px;
+  background: var(--paper); color: var(--ink-soft);
+  font-size: 0.75rem; line-height: 1.6; letter-spacing: 0.06em;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+html:not(.tate) .toc-ico::after, html:not(.tate) .kumi-ico::after { top: calc(100% + 0.25rem); right: 0; }
+html.tate .toc-ico::after, html.tate .kumi-ico::after { right: calc(100% + 0.25rem); top: 50%; transform: translateY(-50%); }
+@media (hover: hover) {
+  .toc-ico:hover::after, .kumi-ico:hover::after { opacity: 1; transition-delay: 0.3s; }
+}
+.toc-ico:focus-visible::after, .kumi-ico:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toc-ico, .kumi-ico, .lb-close, .toc-ico::after, .kumi-ico::after { transition: none; } }
+
+/* ---------- 目次 ---------- */
+nav.toc h1 { letter-spacing: 0.5em; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; padding-inline-start: 3em; display: flex; flex-direction: column; gap: 1.8em; }
+nav.toc li { display: flex; align-items: center; }
+nav.toc li::before { content: "・"; display: inline-block; inline-size: 1.5em; margin-inline-start: -1.5em; color: var(--ink-soft); }
+nav.toc li a { color: inherit; text-decoration: none; }
+nav.toc .t { text-decoration: underline; text-underline-offset: 0.35em; text-decoration-thickness: 1px; text-decoration-color: var(--ink-soft); }
+html.tate nav.toc .t { text-underline-position: right; }
+nav.toc li a:hover .t, nav.toc li a:focus-visible .t { text-decoration-color: var(--ink); }
+
+/* ---------- 横組 ---------- */
+html:not(.tate) body {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(12vh + env(safe-area-inset-top, 0px)) calc(16vh + env(safe-area-inset-bottom, 0px));
+}
+html:not(.tate) article { max-width: 36em; margin: 0 auto; }
+html:not(.tate) nav.toc { max-width: 32em; margin: 0 auto; }
+html:not(.tate) h1 { margin: 0 0 3.5em; text-wrap: balance; }
+html:not(.tate) nav.toc h1 { margin: 0 0 3em; }
+html:not(.tate) .break { margin: 2em 0; letter-spacing: 1em; text-indent: 1em; }
+html:not(.tate) .colophon { margin-top: 4em; text-align: right; }
+html:not(.tate) .back { margin-top: 1em; text-align: right; }
+html:not(.tate) .tools { justify-content: flex-end; margin: 0 -0.5rem 1.5em 0; }
+
+/* ---------- 縦組 ---------- */
+html.tate, html.tate body { height: 100%; overflow: hidden; }
+html.tate body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html.tate main {
+  /* 縦組のブロックは幅が内容なりに広がるので、画面幅に固定して中だけを横にスクロールさせる */
+  width: 100%;
+  height: 100%;
+  writing-mode: vertical-rl;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  scrollbar-width: thin;
+}
+html.tate article, html.tate nav.toc {
+  margin-inline: auto;
+  padding-block: 10vw;
+  padding-inline: 8vh 6vh;
+  letter-spacing: 0.06em;
+  text-orientation: mixed;
+}
+html.tate article { inline-size: min(38em, 100%); }
+html.tate nav.toc { inline-size: min(28em, 100%); }
+html.tate h1 { letter-spacing: 0.15em; margin: 0 0 0 3em; padding-inline-start: 2em; }
+html.tate nav.toc h1 { letter-spacing: 0.5em; }
+html.tate .break { margin: 0 1.5em; }
+html.tate .colophon { margin-block-start: 3em; text-align: end; }
+html.tate .back { margin-block-start: 1em; text-align: end; }
+html.tate .tools { justify-content: flex-start; margin: -0.5rem 0 0 1.25em; }

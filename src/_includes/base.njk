@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja" class="tate">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% if title %}{{ title | inlineMd | striptags }}｜{% endif %}{{ site.title }}</title>
+<meta name="description" content="{{ site.description }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600&display=swap">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script>
+  // 組方は #tate / #yoko、端末の記憶、既定（縦組）の順に決める。描画の前に決めてちらつきを防ぐ
+  (function () {
+    var r = document.documentElement;
+    r.classList.add('js');
+    var m = location.hash.slice(1);
+    if (m !== 'tate' && m !== 'yoko') { try { m = localStorage.getItem('kumi'); } catch (e) { m = null; } }
+    if (m !== 'tate' && m !== 'yoko') m = 'tate';
+    r.classList.toggle('tate', m === 'tate');
+  })();
+</script>
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<main id="scroller" tabindex="0" aria-label="{{ ariaLabel or '本文' }}">
+{{ content | safe }}
+</main>
+</body>
+</html>

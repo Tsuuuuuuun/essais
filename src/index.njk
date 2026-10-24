@@ -1,0 +1,13 @@
+---
+layout: base.njk
+ariaLabel: 目次
+---
+<nav class="toc">
+  {% include "kumi.njk" %}
+  <h1>目次</h1>
+  <ol>
+    {%- for post in collections.posts %}
+    <li><a href="{{ post.url }}" data-kumi><span class="t">{{ post.data.title | inlineMd | safe }}</span></a></li>
+    {%- endfor %}
+  </ol>
+</nav>
