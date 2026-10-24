@@ -24,6 +24,9 @@ cp .env.example .env   # コピーして値を設定
 pnpm run deploy
 ```
 
+執筆画面（`pnpm write`）の右上の矢印のアイコンからも、同じ処理を実行できます。
+開いている原稿を保存してから公開します。結果は画面の下端に、詳しい出力は `pnpm write` のターミナルに出ます。
+
 `_site/` をビルド後、`essais` という名前の Worker にアップロードします。
 pnpm には同名の標準コマンド `pnpm deploy` が存在するため、`run` を明示して実行します。
 

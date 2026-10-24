@@ -5,6 +5,7 @@
 // プレビューはサイトと同じ変換（lib/markdown.js）と CSS（src/assets/site.css）で組む。
 
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir, readdir, stat, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,6 +103,31 @@ const PREVIEW = `<!doctype html>
 </body>
 </html>`;
 
+// ---- 公開 ----
+// pnpm run deploy と同じく、ビルドしてから scripts/deploy.mjs を走らせる。一度に一つだけ
+const ELEVENTY = path.join(ROOT, 'node_modules/@11ty/eleventy/cmd.cjs');
+const DEPLOY = path.join(ROOT, 'scripts/deploy.mjs');
+let deploying = false;
+
+function run(script) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script], { cwd: ROOT, env: process.env });
+    let log = '';
+    const tee = (out) => (c) => { out.write(c); log += c; };
+    child.stdout.on('data', tee(process.stdout));
+    child.stderr.on('data', tee(process.stderr));
+    child.on('error', (e) => resolve({ code: 1, log: log + e.message }));
+    child.on('close', (code) => resolve({ code, log }));
+  });
+}
+
+async function deploy() {
+  const build = await run(ELEVENTY);
+  if (build.code !== 0) return { ok: false, step: 'build', log: build.log };
+  const up = await run(DEPLOY);
+  return { ok: up.code === 0, step: 'deploy', log: build.log + up.log };
+}
+
 // ---- HTTP ----
 function send(res, status, body, type = 'text/plain; charset=utf-8') {
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
@@ -167,6 +193,23 @@ const server = http.createServer(async (req, res) => {
         }
         await writeFile(ORDER_FILE, formatOrder([...new Set(list)]), 'utf8');
         return json(res, 200, { ok: true });
+      }
+
+      // 公開。終わるまで待って結果を返す
+      if (req.method === 'POST' && parts[1] === 'deploy' && parts.length === 2) {
+        if (deploying) return json(res, 409, { error: 'いま公開しています' });
+        deploying = true;
+        try {
+          const r = await deploy();
+          if (r.ok) return json(res, 200, { ok: true, log: r.log });
+          // 最後に出た deploy: の行（scripts/deploy.mjs の die）を知らせる
+          const line = r.log.split('\n').reverse().find((l) => l.startsWith('deploy: '));
+          const error = line ? line.slice('deploy: '.length)
+            : r.step === 'build' ? 'ビルドに失敗しました（ターミナルを見てください）' : '公開に失敗しました（ターミナルを見てください）';
+          return json(res, 500, { error, log: r.log });
+        } finally {
+          deploying = false;
+        }
       }
 
       // プレビュー
