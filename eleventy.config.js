@@ -1,5 +1,5 @@
 import { rm } from 'node:fs/promises';
-import { md } from './lib/markdown.js';
+import { md, toHan } from './lib/markdown.js';
 import { kanjiDate } from './lib/kanji.js';
 import { ORDER_FILE, readOrder, sortPosts } from './lib/order.js';
 import { publishedSlugs } from './lib/post.js';
@@ -35,6 +35,8 @@ export default function (eleventyConfig) {
   eleventyConfig.addFilter('plainText', plainText);
   eleventyConfig.addFilter('excerpt', excerpt);
   eleventyConfig.addFilter('inlineMd', (s) => md.renderInline(String(s ?? '')));
+  // 頁の題と og:title・og:description は横書きでしか出ないので、全角英数字を半角に戻す
+  eleventyConfig.addFilter('han', (s) => toHan(String(s ?? '')));
 
   // 目次の並び。src/posts/order.json の順（書き手が決めた順に読んでもらう）。並べ方は lib/order.js
   eleventyConfig.addWatchTarget(ORDER_FILE);
