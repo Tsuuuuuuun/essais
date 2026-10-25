@@ -57,6 +57,8 @@ html:not(.tate) h2 .no { color: var(--ink-soft); }
 /* ルビ・縦中横 */
 rt { font-size: 0.5em; letter-spacing: 0; }
 .tcy { text-combine-upright: all; }
+/* Shippori Mincho の数字は字面の中心より低く組まれ、上の空きが下より 0.13em ほど広くなるので、縦組でだけ少し上げる */
+html.tate .tcy { position: relative; top: -0.065em; }
 
 /* 強調は傍点（ゴマ点）。縦組では右、横組では上 */
 em {
