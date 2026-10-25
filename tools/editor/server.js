@@ -218,9 +218,9 @@ const server = http.createServer(async (req, res) => {
           if (old?.deleted) return json(res, 409, { error: 'その名前は消した原稿が使っています（pnpm purge で本当に消すと使えます）' });
           await mkdir(dir, { recursive: true });
           await writeFile(file, formatPost(data), 'utf8');
-          // 新しい原稿は目次の末尾に加える
+          // 新しい原稿は目次の先頭に加える
           const order = readOrder();
-          if (isNew && !order.includes(slug)) await writeFile(ORDER_FILE, formatOrder([...order, slug]), 'utf8');
+          if (isNew && !order.includes(slug)) await writeFile(ORDER_FILE, formatOrder([slug, ...order]), 'utf8');
           return json(res, 200, { ok: true });
         }
         // 消す・戻す。front matter の deleted を付け外しするだけ
