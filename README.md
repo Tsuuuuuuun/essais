@@ -11,6 +11,8 @@ Node.js 22.13 以上と pnpm が必要です。
 pnpm install
 ```
 
+公開する際は、`src/_data/site.json` の `url` に公開 URL を末尾のスラッシュなしで設定してください。
+
 ## 執筆環境
 
 ```sh
@@ -65,8 +67,6 @@ pnpm build  # _site/ に書き出し（実行前に _site/ を自動クリーン
 題・日付・本文の書き出しを 1200×630 に組み、Google Chrome の headless モードで撮ります（`pnpm dev` では作りません）。
 Chrome が既定の場所に無いときは `ESSAIS_CHROME` でパスを指定します。見つからなければ画像なしでビルドを続けます。
 撮った画像は `.cache/og/` に取っておき、内容の変わった記事だけを撮り直します。
-
-`og:url` と `og:image` は絶対 URL が必要なため、`src/_data/site.json` の `url` に公開 URL（末尾のスラッシュなし）を設定したときだけ出力されます。
 
 ## ディレクトリ構成
 
