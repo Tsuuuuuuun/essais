@@ -34,6 +34,8 @@ export default function (eleventyConfig) {
   eleventyConfig.addFilter('kanjiDate', kanjiDate);
   eleventyConfig.addFilter('plainText', plainText);
   eleventyConfig.addFilter('excerpt', excerpt);
+  // site.url の末尾の / の有無にかかわらず、頁の絶対 URL を組む
+  eleventyConfig.addFilter('absUrl', (p, base) => new URL(p, base).href);
   eleventyConfig.addFilter('inlineMd', (s) => md.renderInline(String(s ?? '')));
   // 頁の題と og:title・og:description は横書きでしか出ないので、全角英数字を半角に戻す
   eleventyConfig.addFilter('han', (s) => toHan(String(s ?? '')));

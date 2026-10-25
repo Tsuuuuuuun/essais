@@ -12,9 +12,9 @@
 <meta property="og:description" content="{{ ogDesc }}">
 <meta property="og:type" content="{{ 'article' if ogImage else 'website' }}">
 {%- if site.url %}
-<meta property="og:url" content="{{ site.url }}{{ page.url }}">
+<meta property="og:url" content="{{ page.url | absUrl(site.url) }}">
 {%- if ogImage %}
-<meta property="og:image" content="{{ site.url }}{{ page.url }}og.png">
+<meta property="og:image" content="{{ (page.url + 'og.png') | absUrl(site.url) }}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
