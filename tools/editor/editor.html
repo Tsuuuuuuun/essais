@@ -254,12 +254,13 @@ html.tate .ProseMirror { letter-spacing: 0.06em; }
 .list .open {
   flex: 1; min-width: 0; text-align: left;
   font: inherit; color: var(--ink); background: none; border: 0; padding: 0.35em 0; cursor: pointer;
-  display: flex; justify-content: space-between; gap: 1em;
+  display: grid; grid-template-columns: 1fr auto; column-gap: 1em; align-items: baseline;
 }
+.list .m { grid-column: 1 / -1; display: flex; gap: 1em; line-height: 1.5; }
 .list .open:hover span:first-child { text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
 .list .open[aria-current="true"] { font-weight: 600; }
-.list .s { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); flex: none; }
-.list .d { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--ink-soft); flex: none; margin-left: auto; }
+.list .s, .list .dt { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); flex: none; }
+.list .d { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--ink-soft); flex: none; }
 .list .open[data-draft="true"] span:first-child { color: var(--ink-soft); }
 .list .mv {
   flex: none; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%;
@@ -559,11 +560,14 @@ import { createEditor } from '/wysiwyg.js';
         b.dataset.slug = p.slug;
         b.dataset.draft = String(!!p.draft);
         var t = document.createElement('span'); t.textContent = p.title || '（題なし）';
+        var m = document.createElement('span'); m.className = 'm';
+        var dt = document.createElement('span'); dt.className = 'dt'; dt.textContent = p.date;
         var s = document.createElement('span'); s.className = 's'; s.textContent = p.slug;
+        m.append(dt, s);
         if (p.draft) {
           var d = document.createElement('span'); d.className = 'd'; d.textContent = '下書き';
-          b.append(t, d, s);
-        } else b.append(t, s);
+          b.append(t, d, m);
+        } else b.append(t, m);
         b.addEventListener('click', function () {
           closePops();
           var go = function () { openPost(p.slug); };
