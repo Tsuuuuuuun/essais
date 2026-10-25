@@ -8,7 +8,8 @@
     "build": "eleventy",
     "write": "node tools/editor/server.js",
     "deploy": "eleventy && node scripts/deploy.mjs",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "purge": "node scripts/purge.mjs"
   },
   "packageManager": "pnpm@11.13.0",
   "engines": {

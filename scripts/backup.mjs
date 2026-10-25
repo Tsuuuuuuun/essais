@@ -12,6 +12,7 @@
 // キーは src/ からの相対パスそのまま（posts/yomu/index.md）。
 // R2 の LIST が返す etag は単一 PUT なら中身の MD5 なので、手元の MD5 と比べて違うものだけ送る。
 // 手元で消したファイルは R2 から消さない。消しても戻せる場所にしておくため。
+// R2 から消すのは pnpm purge（scripts/purge.mjs）で、消した原稿を本当に消すときだけ。
 // --pull はその逆で、R2 を正として手元を揃える。手元にだけあるファイルは消さない（消し間違いを伝播させない）。
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -22,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const POSTS = join(root, 'src/posts');
 const API = 'https://api.cloudflare.com/client/v4';
-const PREFIX = 'posts/';
+export const PREFIX = 'posts/';
 // git で扱うので写さないもの（src/posts/ からの相対パス）
 const TRACKED = new Set(['posts.json']);
 
@@ -95,7 +96,7 @@ async function getObject(r2, key) {
 }
 
 // R2 にあるものの MD5。1000 件ずつ、cursor が尽きるまで。
-async function remoteHashes(r2) {
+export async function remoteHashes(r2) {
   const hashes = new Map();
   let cursor;
   do {
@@ -106,6 +107,10 @@ async function remoteHashes(r2) {
     cursor = json.result_info?.is_truncated ? json.result_info.cursor : null;
   } while (cursor);
   return hashes;
+}
+
+export async function removeObject(r2, key) {
+  await call(r2, `/accounts/${r2.accountId}/r2/buckets/${r2.bucket}/objects/${keyPath(key)}`, { method: 'DELETE' });
 }
 
 // .env を読んで設定を組む。バケットが無ければ null（写しは取らない）。

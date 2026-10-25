@@ -280,6 +280,14 @@ html.tate .ProseMirror { letter-spacing: 0.06em; }
 .new:hover { color: var(--ink); }
 .del { font: inherit; font-size: 0.8rem; color: var(--ink-soft); background: none; border: 0; padding: 0.5em 0 0; cursor: pointer; width: 100%; text-align: left; }
 .del:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+.trash { margin-top: 1.25em; padding-top: 0.75em; border-top: 1px solid var(--rule); font-size: 0.8rem; }
+.trash h3 { margin: 0 0 0.25em; font: inherit; color: var(--ink-soft); }
+.trash .list li { justify-content: space-between; gap: 1em; padding: 0.25em 0; color: var(--ink-soft); }
+.trash .list .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash .list .s { margin-left: auto; }
+.trash .restore { font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer; flex: none; }
+.trash .restore:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 0.3em; text-decoration-thickness: 1px; }
+.trash p { margin: 0; color: var(--ink-soft); }
 .notes dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35em 1em; }
 .notes dt { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); white-space: nowrap; }
 .notes dd { margin: 0; color: var(--ink-soft); }
@@ -319,6 +327,11 @@ html.tate .ProseMirror { letter-spacing: 0.06em; }
       <ul class="list" id="list"></ul>
       <button type="button" class="new" id="new-btn">新しく書く</button>
       <button type="button" class="del" id="del-btn" hidden>開いている原稿を消す</button>
+      <div class="trash" id="trash" hidden>
+        <h3>消した原稿</h3>
+        <ul class="list" id="trash-list"></ul>
+        <p>本当に消すには pnpm purge</p>
+      </div>
     </div>
 
     <div class="pop right notes" id="notes" hidden>
@@ -455,8 +468,9 @@ import { createEditor } from '/wysiwyg.js';
       setStatus('名前（半角の英小文字・数字・ハイフン）を付けると保存できます', true);
       return Promise.resolve(false);
     }
-    if (!current.slug && posts.some(function (p) { return p.slug === slug; })) {
-      setStatus('その名前の原稿はもうあります', true);
+    var taken = !current.slug && posts.find(function (p) { return p.slug === slug; });
+    if (taken) {
+      setStatus(taken.deleted ? 'その名前は消した原稿が使っています（pnpm purge で本当に消すと使えます）' : 'その名前の原稿はもうあります', true);
       return Promise.resolve(false);
     }
     setStatus('保存しています');
@@ -529,9 +543,11 @@ import { createEditor } from '/wysiwyg.js';
       b.setAttribute('aria-current', b.dataset.slug === current.slug ? 'true' : 'false');
     });
   }
+  // 返すのは消していない原稿だけ。消した原稿は下の「消した原稿」に出す
   function loadList() {
-    return api('GET', '/api/posts').then(function (list) {
-      posts = list;
+    return api('GET', '/api/posts').then(function (all) {
+      posts = all;
+      var list = all.filter(function (p) { return !p.deleted; });
       var ul = $('list');
       ul.innerHTML = '';
       list.forEach(function (p) {
@@ -558,7 +574,32 @@ import { createEditor } from '/wysiwyg.js';
       });
       markCurrent();
       markEnds();
+      loadTrash(all.filter(function (p) { return p.deleted; }));
       return list;
+    });
+  }
+  // 消した原稿は開けない（開いて保存すると、消した印が外れてしまうので）。戻してから開く
+  function loadTrash(gone) {
+    var ul = $('trash-list');
+    ul.innerHTML = '';
+    $('trash').hidden = !gone.length;
+    gone.forEach(function (p) {
+      var li = document.createElement('li');
+      var t = document.createElement('span'); t.className = 't'; t.textContent = p.title || '（題なし）';
+      var s = document.createElement('span'); s.className = 's'; s.textContent = p.slug;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'restore';
+      b.textContent = '戻す';
+      b.setAttribute('aria-label', '「' + (p.title || p.slug) + '」を戻す');
+      b.addEventListener('click', function () {
+        api('POST', '/api/posts/' + p.slug + '/restore')
+          .then(loadList)
+          .then(function () { setStatus('戻しました'); })
+          .catch(function (e) { setStatus(e.message, true); });
+      });
+      li.append(t, s, b);
+      ul.appendChild(li);
     });
   }
 
@@ -631,6 +672,7 @@ import { createEditor } from '/wysiwyg.js';
       li.querySelector('.mv[data-dir="1"]').disabled = i === items.length - 1;
     });
   }
+  // 消した原稿の並びはサーバーが元の位置に残す
   function saveOrder() {
     var slugs = Array.prototype.map.call(document.querySelectorAll('#list li'), function (li) { return li.dataset.slug; });
     posts.sort(function (a, b) { return slugs.indexOf(a.slug) - slugs.indexOf(b.slug); });
@@ -649,7 +691,7 @@ import { createEditor } from '/wysiwyg.js';
     if (!slug) return;
     var p = posts.find(function (x) { return x.slug === slug; });
     closePops();
-    if (!confirm('「' + ((p && p.title) || title.value || slug) + '」を消しますか？\n原稿のフォルダは .trash に移ります。')) return;
+    if (!confirm('「' + ((p && p.title) || title.value || slug) + '」を消しますか？\n一覧の「消した原稿」から戻せます。')) return;
     clearTimeout(saveTimer);
     saving.then(function () {
       return api('DELETE', '/api/posts/' + slug);
@@ -668,8 +710,9 @@ import { createEditor } from '/wysiwyg.js';
     closePops();
     // 開いている原稿は、画面の「下書き」の状態で数える（公開の前に保存する）
     var isDraft = function (p) { return p.slug === current.slug ? draft.checked : !!p.draft; };
-    var n = posts.filter(function (p) { return !isDraft(p); }).length;
-    var m = posts.length - n;
+    var live = posts.filter(function (p) { return !p.deleted; });
+    var n = live.filter(function (p) { return !isDraft(p); }).length;
+    var m = live.length - n;
     if (!confirm('サイトを公開しますか？\n' + kanjiNum(n) + '本の原稿を公開します' + (m ? '（下書きの' + kanjiNum(m) + '本は出しません）' : '') + '。')) return;
     deployBtn.disabled = true;
     save().then(function () {

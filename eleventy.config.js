@@ -15,14 +15,14 @@ export default function (eleventyConfig) {
     if (runMode === 'build') await rm(directories.output, { recursive: true, force: true });
   });
 
-  // 画像は下書きでない記事のぶんだけ写す。下書きかどうかは設定を読んだ時点で決まる
+  // 画像は下書きでも消したものでもない記事のぶんだけ写す。どちらかは設定を読んだ時点で決まる
   for (const slug of publishedSlugs()) {
     eleventyConfig.addPassthroughCopy(`src/posts/${slug}/*.{jpg,jpeg,png,gif,webp,avif,svg}`);
   }
 
-  // draft: true の原稿（下書き）は書き出さず、目次にも載せない
+  // draft: true の原稿（下書き）と deleted: true の原稿（消したもの）は書き出さず、目次にも載せない
   eleventyConfig.addPreprocessor('drafts', 'md', (data) => {
-    if (data.draft === true) return false;
+    if (data.draft === true || data.deleted === true) return false;
   });
 
   eleventyConfig.addFilter('kanjiDate', kanjiDate);

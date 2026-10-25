@@ -2,13 +2,14 @@
 //   pnpm write → http://localhost:8090
 // 原稿は src/posts/<名前>/index.md に直接保存する。画像も同じフォルダに置く。
 // 下書きは front matter の draft: true（読み書きは lib/post.js）。
-// 消した原稿はフォルダごと .trash/<名前>-<日時>/ に移す。戻すときはフォルダを src/posts/ に戻す。
+// 消した原稿は front matter に deleted: true を付けるだけで、フォルダも目次の並びも残す（戻せるように）。
+// 本当に消すのは pnpm purge（scripts/purge.mjs）。
 // 見たままの編集には ProseMirror を使う。node_modules から ES モジュールのまま配る（/vendor/<名前>.js）。
 
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { readFile, writeFile, mkdir, readdir, stat, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,6 @@ import { toDoc } from './doc.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const TRASH = path.join(ROOT, '.trash');
 const PORT = Number(process.env.PORT) || 8090;
 const HOST = process.env.HOST || '127.0.0.1';
 
@@ -40,7 +40,7 @@ async function listPosts() {
     if (!SLUG.test(name)) continue;
     try {
       const p = parsePost(await readFile(path.join(POSTS, name, 'index.md'), 'utf8'));
-      out.push({ slug: name, title: p.title, date: p.date, draft: p.draft });
+      out.push({ slug: name, title: p.title, date: p.date, draft: p.draft, deleted: p.deleted });
     } catch {}
   }
   return sortPosts(out, readOrder(), (p) => p.slug, (p) => Date.parse(p.date) || 0);
@@ -170,7 +170,10 @@ const server = http.createServer(async (req, res) => {
         if (!Array.isArray(list) || !list.every((s) => typeof s === 'string' && SLUG.test(s))) {
           return json(res, 400, { error: '並び順を読めません' });
         }
-        await writeFile(ORDER_FILE, formatOrder([...new Set(list)]), 'utf8');
+        // 一覧に出ていない名前（消した原稿など）は、もとの位置に残す
+        const given = new Set(list), rest = [...given];
+        const merged = readOrder().map((s) => (given.has(s) ? rest.shift() : s)).filter(Boolean);
+        await writeFile(ORDER_FILE, formatOrder([...new Set([...merged, ...rest])]), 'utf8');
         return json(res, 200, { ok: true });
       }
 
@@ -209,7 +212,10 @@ const server = http.createServer(async (req, res) => {
         }
         if (req.method === 'PUT' && parts.length === 3) {
           const data = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-          const isNew = await stat(file).then(() => false, () => true);
+          const old = await readFile(file, 'utf8').then(parsePost, () => null);
+          const isNew = !old;
+          // 消した原稿の名前は、pnpm purge で本当に消すまで使えない
+          if (old?.deleted) return json(res, 409, { error: 'その名前は消した原稿が使っています（pnpm purge で本当に消すと使えます）' });
           await mkdir(dir, { recursive: true });
           await writeFile(file, formatPost(data), 'utf8');
           // 新しい原稿は目次の末尾に加える
@@ -217,15 +223,11 @@ const server = http.createServer(async (req, res) => {
           if (isNew && !order.includes(slug)) await writeFile(ORDER_FILE, formatOrder([...order, slug]), 'utf8');
           return json(res, 200, { ok: true });
         }
-        // 消す。フォルダは .trash に移し、目次の並びからも外す
-        if (req.method === 'DELETE' && parts.length === 3) {
-          try { await stat(file); } catch { return json(res, 404, { error: 'この原稿は見つかりません' }); }
-          const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
-          const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-          await mkdir(TRASH, { recursive: true });
-          await rename(dir, path.join(TRASH, `${slug}-${stamp}`));
-          const order = readOrder();
-          if (order.includes(slug)) await writeFile(ORDER_FILE, formatOrder(order.filter((s) => s !== slug)), 'utf8');
+        // 消す・戻す。front matter の deleted を付け外しするだけ
+        if ((req.method === 'DELETE' && parts.length === 3) || (req.method === 'POST' && parts[3] === 'restore' && parts.length === 4)) {
+          let p;
+          try { p = parsePost(await readFile(file, 'utf8')); } catch { return json(res, 404, { error: 'この原稿は見つかりません' }); }
+          await writeFile(file, formatPost({ ...p, deleted: req.method === 'DELETE' }), 'utf8');
           return json(res, 200, { ok: true });
         }
         // 画像を記事のフォルダに保存する
