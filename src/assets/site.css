@@ -188,9 +188,16 @@ nav.toc ol { list-style: none; margin: 0; padding: 0; padding-inline-start: 3em;
 nav.toc li { display: flex; align-items: center; }
 nav.toc li::before { content: "・"; display: inline-block; inline-size: 1.5em; margin-inline-start: -1.5em; color: var(--ink-soft); }
 nav.toc li a { color: inherit; text-decoration: none; }
-nav.toc .t { text-decoration: underline; text-underline-offset: 0.35em; text-decoration-thickness: 1px; text-decoration-color: var(--ink-soft); }
-html.tate nav.toc .t { text-underline-position: right; }
-nav.toc li a:hover .t, nav.toc li a:focus-visible .t { text-decoration-color: var(--ink); }
+/* 下線は text-decoration だと和欧間の margin（.ws/.we/.zws/.zwe）の上で途切れるので、背景で引く */
+nav.toc .t {
+  --ul: var(--ink-soft);
+  padding-block-end: 0.12em;
+  background: linear-gradient(var(--ul), var(--ul)) 0 100% / 100% 1px no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+html.tate nav.toc .t { padding-block-end: 0; padding-right: 0.2em; background-position: 100% 0; background-size: 1px 100%; }
+nav.toc li a:hover .t, nav.toc li a:focus-visible .t { --ul: var(--ink); }
 
 /* ---------- 横組 ---------- */
 html:not(.tate) body {
