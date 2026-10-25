@@ -4,7 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% if title %}{{ title | inlineMd | striptags }}｜{% endif %}{{ site.title }}</title>
-<meta name="description" content="{{ site.description }}">
+{%- set ogTitle = (title | inlineMd | plainText) if title else site.title %}
+{%- set ogDesc = (content | excerpt) if ogImage else site.description %}
+<meta name="description" content="{{ ogDesc }}">
+<meta property="og:site_name" content="{{ site.title }}">
+<meta property="og:title" content="{{ ogTitle }}">
+<meta property="og:description" content="{{ ogDesc }}">
+<meta property="og:type" content="{{ 'article' if ogImage else 'website' }}">
+{%- if site.url %}
+<meta property="og:url" content="{{ site.url }}{{ page.url }}">
+{%- if ogImage %}
+<meta property="og:image" content="{{ site.url }}{{ page.url }}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+{%- endif %}
+{%- endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600&display=swap">

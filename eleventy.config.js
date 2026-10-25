@@ -3,6 +3,7 @@ import { md } from './lib/markdown.js';
 import { kanjiDate } from './lib/kanji.js';
 import { ORDER_FILE, readOrder, sortPosts } from './lib/order.js';
 import { publishedSlugs } from './lib/post.js';
+import { excerpt, plainText, writeOgImages } from './lib/og.js';
 
 export default function (eleventyConfig) {
   // 原稿の変換は lib/markdown.js（執筆画面のプレビューと共通）
@@ -13,6 +14,11 @@ export default function (eleventyConfig) {
   // 消した原稿や下書きに戻した原稿の頁が残って、公開されてしまわないように
   eleventyConfig.on('eleventy.before', async ({ runMode, directories }) => {
     if (runMode === 'build') await rm(directories.output, { recursive: true, force: true });
+  });
+
+  // OGP 画像（lib/og.js）。Chrome で撮るので時間がかかり、一回きりのビルドでだけ作る
+  eleventyConfig.on('eleventy.after', async ({ runMode, results }) => {
+    if (runMode === 'build') await writeOgImages(results);
   });
 
   // 画像は下書きでも消したものでもない記事のぶんだけ写す。どちらかは設定を読んだ時点で決まる
@@ -26,6 +32,8 @@ export default function (eleventyConfig) {
   });
 
   eleventyConfig.addFilter('kanjiDate', kanjiDate);
+  eleventyConfig.addFilter('plainText', plainText);
+  eleventyConfig.addFilter('excerpt', excerpt);
   eleventyConfig.addFilter('inlineMd', (s) => md.renderInline(String(s ?? '')));
 
   // 目次の並び。src/posts/order.json の順（書き手が決めた順に読んでもらう）。並べ方は lib/order.js

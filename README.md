@@ -59,13 +59,22 @@ pnpm build  # _site/ に書き出し（実行前に _site/ を自動クリーン
 
 `pnpm write` と `pnpm dev` は、別々のターミナルで同時に起動できます。
 
+### OGP 画像
+
+`pnpm build`（と `pnpm run deploy`、執筆画面からの公開）では、記事ごとに縦組の OGP 画像を `og.png` として書き出します。
+題・日付・本文の書き出しを 1200×630 に組み、Google Chrome の headless モードで撮ります（`pnpm dev` では作りません）。
+Chrome が既定の場所に無いときは `ESSAIS_CHROME` でパスを指定します。見つからなければ画像なしでビルドを続けます。
+撮った画像は `.cache/og/` に取っておき、内容の変わった記事だけを撮り直します。
+
+`og:url` と `og:image` は絶対 URL が必要なため、`src/_data/site.json` の `url` に公開 URL（末尾のスラッシュなし）を設定したときだけ出力されます。
+
 ## ディレクトリ構成
 
 ```
 src/posts/<名前>/index.md    原稿
 src/posts/<名前>/*.jpg など  その記事の画像
 src/posts/order.json         目次の並び
-src/_data/site.json          サイトの名前と説明
+src/_data/site.json          サイトの名前と説明、公開 URL
 ```
 
 原稿の先頭には Front Matter として題と日付が入ります（下書きの場合は `draft: true`、削除した場合は `deleted: true` が付与されます）。これらは執筆画面側で自動管理されるため、手作業で記述する必要はありません。
