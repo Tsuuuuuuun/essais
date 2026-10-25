@@ -251,10 +251,20 @@ export function toMarkdown(doc) {
   const blocks = [];
   const notes = [];
   const seen = new Set();
+  // 段落と段落の間の空の段落は、その数だけ空行を重ねて残す（頭と末尾、見出しや引用の前後の空の段落は落とす）
+  let blank = 0;
+  let afterParagraph = false;
   doc.forEach((n) => {
     if (n.type !== N.note_def) {
       const s = blockMd(n);
-      if (s !== null) blocks.push(s);
+      if (s === null) {
+        if (n.type === N.paragraph) blank++;
+        return;
+      }
+      const isParagraph = n.type === N.paragraph;
+      blocks.push((afterParagraph && isParagraph ? '\n'.repeat(blank) : '') + s);
+      blank = 0;
+      afterParagraph = isParagraph;
       return;
     }
     const { label } = n.attrs;
@@ -777,7 +787,7 @@ const rules = inputRules({
   ],
 });
 
-// 貼り付けた文字は、空行で段落を分け、一つの改行は段落の中の改行として読む
+// 貼り付けた文字は、空行で段落を分け、一つの改行は段落の中の改行として読む。重ねた空行は空の段落にする
 function parseClipboardText(text, $context) {
   const para = (s) => {
     const inline = [];
@@ -787,11 +797,15 @@ function parseClipboardText(text, $context) {
     });
     return inline;
   };
-  const chunks = text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '').split(/\n{2,}/);
+  const parts = text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '').split(/(\n{2,})/);
+  const chunks = parts.filter((_, i) => i % 2 === 0);
   if ($context.parent.type === N.note_def || $context.parent.type === N.heading) {
     return new Slice(Fragment.from(para(chunks.join('\n'))), 0, 0);
   }
-  return new Slice(Fragment.from(chunks.map((c) => N.paragraph.create(null, para(c)))), 1, 1);
+  const paragraphs = parts.flatMap((c, i) => (i % 2 === 0
+    ? [N.paragraph.create(null, para(c))]
+    : Array.from({ length: c.length - 2 }, () => N.paragraph.create())));
+  return new Slice(Fragment.from(paragraphs), 1, 1);
 }
 
 // ---- 編集画面 ----

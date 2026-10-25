@@ -43,6 +43,7 @@ article, nav.toc {
 }
 h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: 0.12em; line-height: 1.6; }
 p { margin: 0; text-indent: 1em; }
+.blank { block-size: 1lh; }
 .break { color: var(--ink-soft); text-indent: 0; text-align: center; }
 .colophon { color: var(--ink-soft); font-size: 0.85rem; text-indent: 0; }
 .back { font-size: 0.85rem; text-indent: 0; }
