@@ -139,8 +139,9 @@ html.js .figs { display: none; }
 
 /* ---------- 目次へ・組方の切り替え（線だけのアイコン） ---------- */
 .tools { display: flex; }
-/* 押し間違えないよう、目次へは行頭、組方の切り替えは行末に離して置く */
-.kumi-ico { margin-inline-start: auto; }
+/* 押し間違えないよう、目次へは左上、組方の切り替えは右上に離して置く。
+   切り替えても位置が入れ替わらないよう、縦組でも横組でも同じ並びにする */
+.kumi-ico { margin-left: auto; }
 .toc-ico, .kumi-ico, .lb-close {
   display: grid; place-items: center;
   width: 2.25rem; height: 2.25rem;
@@ -174,8 +175,8 @@ html:not(.js) .tools { display: none; }
   transition: opacity 0.15s ease;
 }
 .toc-ico::after, .kumi-ico::after { top: calc(100% + 0.25rem); }
-html:not(.tate) .toc-ico::after, html.tate .kumi-ico::after { left: 0; }
-html:not(.tate) .kumi-ico::after, html.tate .toc-ico::after { right: 0; }
+.toc-ico::after { left: 0; }
+.kumi-ico::after { right: 0; }
 @media (hover: hover) {
   .toc-ico:hover::after, .kumi-ico:hover::after { opacity: 1; transition-delay: 0.3s; }
 }
@@ -242,7 +243,7 @@ html.tate nav.toc h1 { letter-spacing: 0.5em; }
 html.tate .break { margin: 0 1.5em; }
 html.tate .colophon { margin-block-start: 3em; text-align: end; }
 html.tate .back { margin-block-start: 1em; text-align: end; }
-/* 縦組でもアイコンは画面の上辺に置く。目次へは右上（読み始め）、組方の切り替えは左上。
+/* 縦組でもアイコンは画面の上辺に、横組と同じ並びで置く。
    本文は横に送られるので画面に固定し、本文の上の余白に収める */
 html.tate .tools {
   position: fixed;
@@ -250,8 +251,6 @@ html.tate .tools {
   left: calc(max(16px, env(safe-area-inset-left, 0px)) + 10vw - 0.5rem);
   right: calc(max(16px, env(safe-area-inset-right, 0px)) + 10vw - 0.5rem);
   writing-mode: horizontal-tb;
-  flex-direction: row-reverse;
   pointer-events: none;
 }
 html.tate .tools > * { pointer-events: auto; }
-html.tate .kumi-ico { margin-inline-start: 0; margin-right: auto; }
